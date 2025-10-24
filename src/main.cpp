@@ -45,12 +45,20 @@ int main()
     {
         int key;
         std::string value;
-        for(int i=0;i<100;i++)
+        for(int i=0;i<10;i++)
         {
             key = rand()%1000;
             value = random_string(5);
             kvdb.insertKeyValue(key, value);
         }
+        
+        kvdb.insertKeyValue(1, "hello");
+        kvdb.insertKeyValue(2, "hello");
+        kvdb.insertKeyValue(3, "hello");
+        kvdb.deleteKeyValue(1);
+        kvdb.updateKeyValue(2, "else");
+        std::cout << kvdb.getValueForKey(3).value() << std::endl;
+
 
         
         std::cout << "\nSelecting all keys:" << std::endl;

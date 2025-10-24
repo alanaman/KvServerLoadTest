@@ -1,5 +1,9 @@
 #include "kv_database.hpp"
 #include <sqlpp11/postgresql/on_conflict.h>
+#include <optional>         // For std::optional
+#include <sqlpp11/update.h>   // For update()
+#include <sqlpp11/remove.h> // For remove_from()
+#include <sqlpp11/select.h>   // For select()
 
 tables::KeyValueTable KvDatabase::tab;
 
@@ -79,4 +83,90 @@ void KvDatabase::insertKeyValueSafe(int key, const std::string &value)
         // Handle other non-database C++ exceptions
         std::cerr << "Generic error: " << ex.what() << std::endl;
     }
+}
+
+/**
+ * @brief Updates the value for an existing key.
+ * If the key does not exist, it prints a warning and does nothing.
+ */
+void KvDatabase::updateKeyValue(int key, const std::string& value)
+{
+    try
+    {
+        auto update_stmt = update(tab).set(
+            tab.value = value
+        ).where(tab.key == key);
+
+        // db(statement) returns the number of affected rows
+        auto result = db(update_stmt);
+        
+        if (result == 0)
+        {
+            std::cout << "Warning: Key " << key << " not found. No update performed." << std::endl;
+        }
+        else
+        {
+            std::cout << "Successfully updated key " << key << "." << std::endl;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Database error during update: " << e.what() << std::endl;
+    }
+}
+
+/**
+ * @brief Deletes a key-value pair from the database.
+ * If the key does not exist, it prints a warning and does nothing.
+ */
+void KvDatabase::deleteKeyValue(int key)
+{
+    try
+    {
+        auto delete_stmt = remove_from(tab).where(tab.key == key);
+
+        // db(statement) returns the number of affected rows
+        auto result = db(delete_stmt);
+
+        if (result == 0)
+        {
+            std::cout << "Warning: Key " << key << " not found. No deletion performed." << std::endl;
+        }
+        else
+        {
+            std::cout << "Successfully deleted key " << key << "." << std::endl;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Database error during delete: " << e.what() << std::endl;
+    }
+}
+
+/**
+ * @brief Retrieves the value for a given key.
+ * @return std::optional<std::string> containing the value if found, 
+ * or std::nullopt if the key does not exist or an error occurs.
+ */
+std::optional<std::string> KvDatabase::getValueForKey(int key)
+{
+    try
+    {
+        auto select_stmt = select(tab.value).from(tab).where(tab.key == key);
+
+        // Use a loop to process the result set.
+        // Since 'key' is a PRIMARY KEY, this loop will run at most once.
+        for (const auto& row : db(select_stmt))
+        {
+            // Key was found, return the value
+            return row.value;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Database error during select: " << e.what() << std::endl;
+    }
+
+    // Key not found or an error occurred
+    return std::nullopt;
 }
