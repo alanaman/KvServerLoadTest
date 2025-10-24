@@ -1,0 +1,19 @@
+# CMake build directory
+build/
+out/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+
+# VS Code settings
+.vscode/
+.devcontainer/
+
+
+# Other common build artifacts
+*.o
+*.exe
+*.dll
+*.so
+*.a
+

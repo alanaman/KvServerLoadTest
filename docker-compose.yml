@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  # The PostgreSQL Database Service
+  db:
+    image: postgres:16
+    container_name: postgres-db
+    environment:
+      POSTGRES_DB: kv_db
+      POSTGRES_USER: kv_app
+      POSTGRES_PASSWORD: mysecretpassword
+    ports:
+      - "5432:5432" # Exposes port to host machine (optional for app, but good for you)
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  # Your Application Service
+  app:
+    # If you have a Dockerfile, use 'build'
+    build: . 
+    # If you have a pre-built image, use 'image'
+    # image: my-app-image
+    container_name: my-app
+    ports:
+      - "8000:8000" # Example: if your app runs on port 8000
+    networks:
+      - app-network
+    depends_on:
+      - db # Tells Docker to start the 'db' service before the 'app' service
+    environment:
+      DATABASE_HOST: db
+      DATABASE_NAME: kv_db
+      DATABASE_USER: kv_app
+      DATABASE_PASSWORD: mysecretpassword
+
+# Define the network
+networks:
+  app-network:
+    driver: bridge
+
+# Define the volume to persist data
+volumes:
+  postgres_data:
