@@ -1,16 +1,11 @@
-#include <sqlpp11/sqlpp11.h>
-#include <sqlpp11/postgresql/postgresql.h>
-#include <sqlpp11/postgresql/connection.h>
-#include <sqlpp11/postgresql/exception.h>
-#include <sqlpp11/postgresql/on_conflict.h> // <-- Put PostgreSQL headers first
-
 #include <string>
 #include <iostream>
-// #include <libpq-fe.h> 
 
-// Include our table definition
 #include "KeyValue.h"
 #include "kv_database.hpp"
+#include "kv_server.hpp"
+
+#include <httplib.h>
 
 std::string random_string(int length)
 {
@@ -41,6 +36,12 @@ std::string random_string(int length)
 int main()
 {
     KvDatabase kvdb;
+    KvServer svr(&kvdb);
+
+    svr.Listen();
+    
+    return 0;
+
     try
     {
         int key;
@@ -49,7 +50,7 @@ int main()
         {
             key = rand()%1000;
             value = random_string(5);
-            kvdb.insertKeyValue(key, value);
+            kvdb.insertKeyValuePrep(key, value);
         }
         
         kvdb.insertKeyValue(1, "hello");
@@ -68,6 +69,10 @@ int main()
         {
             std::cout << "  Key: " << row.key << ", Value: " << row.value << std::endl;
         }
+
+        kvdb.testInsertThroughput(100000);
+        kvdb.testUpdateThroughput(100000);
+        kvdb.testReadThroughput(100000);
     }
     catch (const std::exception& e)
     {
