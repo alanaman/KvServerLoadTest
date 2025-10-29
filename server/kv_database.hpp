@@ -51,6 +51,8 @@ public:
     PreparedSelect_t prepared_select;
 
     KvDatabase();
+
+    void Bootstrap();
     
 
     void insertKeyValueSafe(int key, const std::string& value);

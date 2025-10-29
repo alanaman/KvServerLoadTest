@@ -36,7 +36,10 @@ KvDatabase::KvDatabase()
     {
         std::cerr << "Could not connect to database: " << e.what() << std::endl;
     }
+}
 
+void KvDatabase::Bootstrap()
+{
     try
     {
         db.execute("DROP TABLE IF EXISTS key_value;");
@@ -124,7 +127,7 @@ void KvDatabase::updateKeyValue(int key, const std::string& value)
         }
         else
         {
-            std::cout << "Successfully updated key " << key << "." << std::endl;
+            // std::cout << "Successfully updated key " << key << "." << std::endl;
         }
     }
     catch (const std::exception& e)
@@ -179,6 +182,10 @@ std::optional<std::string> KvDatabase::getValueForKey(int key)
     try
     {
         auto select_stmt = select(tab.value).from(tab).where(tab.key == key);
+
+        // std::ostringstream os;
+        // sqlpp::serialize(select_stmt, os);
+        // std::cout << os.str() << std::endl;
 
         // Use a loop to process the result set.
         // Since 'key' is a PRIMARY KEY, this loop will run at most once.

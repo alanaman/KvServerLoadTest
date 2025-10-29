@@ -1,6 +1,6 @@
 #include "kv_server.hpp"
 
-KvServer::KvServer(KvDatabase *database, int thread_count):database(database)
+KvServer::KvServer(ConnectionPool<KvDatabase>* dbConnPool, int thread_count):connPool(dbConnPool)
 {
     server.new_task_queue = [thread_count]{
         return new httplib::ThreadPool(thread_count);
@@ -25,6 +25,8 @@ void KvServer::GetKv(const httplib::Request &req, httplib::Response &res)
 {
     try
     {
+        auto database = connPool->acquire();
+
         // req.matches[0] is the full path, req.matches[1] is the first capture group
         int key = std::stoi(req.matches[1].str());
         auto opt_value = database->getValueForKey(key);
@@ -59,6 +61,8 @@ void KvServer::PutKv(const httplib::Request &req, httplib::Response &res)
     {
         int key = std::stoi(req.matches[1].str());
         std::string value = req.body;
+
+        auto database = connPool->acquire();
 
         // Check if key exists to set the correct HTTP status
         auto opt_value = database->getValueForKey(key);
@@ -95,6 +99,8 @@ void KvServer::DeleteKv(const httplib::Request &req, httplib::Response &res)
 {
     try
     {
+        auto database = connPool->acquire();
+
         int key = std::stoi(req.matches[1].str());
         database->deleteKeyValue(key);
         res.set_content("Deleted", "text/plain");
