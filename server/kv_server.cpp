@@ -1,13 +1,19 @@
 #include "kv_server.hpp"
 
-KvServer::KvServer(ConnectionPool<KvDatabase>* dbConnPool, int thread_count):connPool(dbConnPool)
+KvServer::KvServer(ConnectionPool<KvDatabase>* dbConnPool, int thread_count, int cache_size):
+    connPool(dbConnPool), cache(static_cast<size_t>(cache_size))
 {
     server.new_task_queue = [thread_count]{
         return new httplib::ThreadPool(thread_count);
     };
+
+
     
-    server.Get("/", [](const httplib::Request & /*req*/, httplib::Response &res) {
-        res.set_content("Hello World! This is a KV Store.", "text/plain");
+    server.Get("/", [this](const httplib::Request & /*req*/, httplib::Response &res) {
+        std::stringstream ss;
+        ss<<"totalGets:"<<totalGets<<std::endl;
+        ss<<"cacheHits:"<<cacheHits<<std::endl;
+        res.set_content(ss.str(), "text/plain");
     });
 
     server.Get("/key/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
@@ -29,12 +35,26 @@ void KvServer::GetKv(const httplib::Request &req, httplib::Response &res)
 
         // req.matches[0] is the full path, req.matches[1] is the first capture group
         int key = std::stoi(req.matches[1].str());
+
+        totalGets++;
+
+        auto val = cache.Get(key);
+        if(val.has_value())
+        {
+            res.set_content(val.value(), "text/plain");
+            res.status = 200; // OK
+            cacheHits++;
+            return;
+        }
+
         auto opt_value = database->getValueForKey(key);
 
         if (opt_value.has_value())
         {
             res.set_content(opt_value.value(), "text/plain");
             res.status = 200; // OK
+
+            cache.Put(key, opt_value.value());
         }
         else
         {
@@ -64,23 +84,10 @@ void KvServer::PutKv(const httplib::Request &req, httplib::Response &res)
 
         auto database = connPool->acquire();
 
-        // Check if key exists to set the correct HTTP status
-        auto opt_value = database->getValueForKey(key);
-
-        if (opt_value.has_value())
-        {
             // Key exists, so we're updating
-            database->updateKeyValue(key, value);
+            database->putKeyValue(key, value);
             res.set_content("Updated", "text/plain");
             res.status = 200; // OK
-        }
-        else
-        {
-            // Key doesn't exist, so we're creating
-            database->insertKeyValue(key, value);
-            res.set_content("Created", "text/plain");
-            res.status = 201; // Created
-        }
     }
     catch (const std::invalid_argument &e)
     {

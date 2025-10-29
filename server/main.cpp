@@ -44,6 +44,7 @@ int main(int argc, char* argv[])
     int num_threads = std::stoi(argv[1]);
     KvDatabase kvdb;
     kvdb.Bootstrap();
+    kvdb.PrepareStatements();
 
     auto factory = []() {
         try {
@@ -85,7 +86,7 @@ int main(int argc, char* argv[])
         std::cout << "\nSelecting all keys:" << std::endl;
         
         // auto& row = db(select(all_of(tab)).from(tab).where(tab.id > 1))
-        for (const auto& row : kvdb.db(sqlpp::select(all_of(KvDatabase::tab)).from(KvDatabase::tab).unconditionally()))
+        for (const auto& row : kvdb.db(sqlpp::select(all_of(KvDatabase::kv_table)).from(KvDatabase::kv_table).unconditionally()))
         {
             std::cout << "  Key: " << row.key << ", Value: " << row.value << std::endl;
         }

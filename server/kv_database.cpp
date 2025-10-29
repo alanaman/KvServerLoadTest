@@ -15,7 +15,7 @@
 // SQLPP_ALIASROVIDER(key)
 // SQLPP_ALIASROVIDER(value)
 
-tables::KeyValueTable KvDatabase::tab;
+tables::KeyValueTable KvDatabase::kv_table;
 
 KvDatabase::KvDatabase()
 {
@@ -44,7 +44,6 @@ void KvDatabase::Bootstrap()
     {
         db.execute("DROP TABLE IF EXISTS key_value;");
         db.execute("CREATE TABLE key_value (key INTEGER PRIMARY KEY, value TEXT NOT NULL);");
-        PrepareStatements();
     }
     catch (const std::exception& e)
     {
@@ -61,9 +60,9 @@ void KvDatabase::PrepareStatements()
 
 void KvDatabase::insertKeyValue(int key, const std::string &value)
 {
-    auto insert = sqlpp::postgresql::insert_into(tab).set(
-        tab.key = key,
-        tab.value = value
+    auto insert = sqlpp::postgresql::insert_into(kv_table).set(
+        kv_table.key = key,
+        kv_table.value = value
     );
     db(insert.on_conflict().do_nothing());
 }
@@ -73,9 +72,9 @@ void KvDatabase::insertKeyValueSafe(int key, const std::string &value)
     try
     {
         // Prepare the insert statement
-        auto insert = insert_into(tab).set(
-            tab.key = key,
-            tab.value = value
+        auto insert = insert_into(kv_table).set(
+            kv_table.key = key,
+            kv_table.value = value
         );
 
         // Execute the insert
@@ -114,9 +113,9 @@ void KvDatabase::updateKeyValue(int key, const std::string& value)
 {
     try
     {
-        auto update_stmt = update(tab).set(
-            tab.value = value
-        ).where(tab.key == key);
+        auto update_stmt = update(kv_table).set(
+            kv_table.value = value
+        ).where(kv_table.key == key);
 
         // db(statement) returns the number of affected rows
         auto result = db(update_stmt);
@@ -152,7 +151,7 @@ void KvDatabase::deleteKeyValue(int key)
 {
     try
     {
-        auto delete_stmt = remove_from(tab).where(tab.key == key);
+        auto delete_stmt = remove_from(kv_table).where(kv_table.key == key);
 
         // db(statement) returns the number of affected rows
         auto result = db(delete_stmt);
@@ -181,7 +180,7 @@ std::optional<std::string> KvDatabase::getValueForKey(int key)
 {
     try
     {
-        auto select_stmt = select(tab.value).from(tab).where(tab.key == key);
+        auto select_stmt = select(kv_table.value).from(kv_table).where(kv_table.key == key);
 
         // std::ostringstream os;
         // sqlpp::serialize(select_stmt, os);
@@ -202,6 +201,19 @@ std::optional<std::string> KvDatabase::getValueForKey(int key)
 
     // Key not found or an error occurred
     return std::nullopt;
+}
+
+void KvDatabase::putKeyValue(int key, const std::string &value)
+{
+    db(sqlpp::postgresql::insert_into(kv_table).set(
+        kv_table.key = key,
+        kv_table.value = value
+      )
+      .on_conflict(kv_table.key)
+      .do_update(
+        kv_table.value = value
+      )
+    );
 }
 
 double KvDatabase::testInsertThroughput(size_t num_operations)

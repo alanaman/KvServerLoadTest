@@ -38,7 +38,7 @@ namespace {
 class KvDatabase
 {
 public:
-    static tables::KeyValueTable tab;
+    static tables::KeyValueTable kv_table;
     
     
     sqlpp::postgresql::connection db;
@@ -59,10 +59,12 @@ public:
     void insertKeyValue(int key, const std::string& value);
     void insertKeyValuePrep(int key, const std::string& value);
     void updateKeyValue(int key, const std::string& value);
+
+    std::optional<std::string> getValueForKey(int key);
+    void putKeyValue(int key,  const std::string& value);
     void deleteKeyValue(int key);
 
     void PrepareStatements();
-    std::optional<std::string> getValueForKey(int key);
 
     double testInsertThroughput(size_t num_operations);
     double testUpdateThroughput(size_t num_operations);
