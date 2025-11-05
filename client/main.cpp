@@ -9,14 +9,13 @@
 #include <memory>    // Required for std::unique_ptr
 #include <iomanip>   // Required for std::setprecision
 
-// Single-header client/server library
-// Download from: https://github.com/yhirose/cpp-httplib
-#include "httplib.h"
+#include "putall_workload.hpp"
+#include "getall_workload.hpp"
+#include "getpopular_workload.hpp"
+#include "mixed_workload.hpp"
 
 // --- Workload Keyspace Definitions ---
-constexpr int KEYSPACE_SIZE = 1'000'000;
-constexpr int LARGE_KEYSPACE_START = KEYSPACE_SIZE + 1;
-constexpr int LARGE_KEYSPACE_END = 1'000'000'000;
+
 
 
 // --- Global Atomic Counters & Stop Flag ---
@@ -24,189 +23,6 @@ std::atomic<bool> keep_running{false};
 std::atomic<long long> total_requests{0};
 std::atomic<long long> total_errors{0};
 std::atomic<long long> total_duration_micros{0};
-
-
-// --- Abstract Base Class for Workloads ---
-
-/**
- * @brief Abstract interface for a workload operation.
- *
- * Each thread will receive its own clone of a workload object,
- * allowing it to maintain its own state (like random distributions)
- * without needing locks.
- */
-class IWorkload {
-public:
-    virtual ~IWorkload() = default;
-
-    /**
-     * @brief (Optional) Pre-populates the server with required data
-     * before the test starts.
-     * @param cli A client for executing preparation requests.
-     */
-    virtual void prepare(httplib::Client& cli) {
-        // Default implementation does nothing.
-    }
-
-    /**
-     * @brief Executes a single workload operation (e.g., one HTTP request).
-     * @param cli The HTTP client dedicated to this thread.
-     * @param gen The random number generator dedicated to this thread.
-     * @return The result of the HTTP operation.
-     */
-    virtual httplib::Result execute(httplib::Client& cli, std::mt19937& gen) = 0;
-
-    /**
-     * @brief Creates a deep copy of the workload object.
-     * @return A std::unique_ptr to the new IWorkload instance.
-     */
-    virtual std::unique_ptr<IWorkload> clone() const = 0;
-};
-
-
-// --- Concrete Workload Implementations ---
-
-/**
- * @brief Workload a: "put_all"
- * Performs random PUT requests within the main keyspace.
- * No preparation needed as it creates its own keys.
- */
-class PutAllWorkload : public IWorkload {
-    std::uniform_int_distribution<> dist;
-public:
-    PutAllWorkload() : dist(1, KEYSPACE_SIZE) {}
-
-    httplib::Result execute(httplib::Client& cli, std::mt19937& gen) override {
-        int key = dist(gen);
-        std::string path = "/key/" + std::to_string(key);
-        std::string value = "value-" + std::to_string(key);
-        return cli.Put(path.c_str(), value, "text/plain");
-    }
-
-    std::unique_ptr<IWorkload> clone() const override {
-        return std::make_unique<PutAllWorkload>(*this);
-    }
-};
-
-/**
- * @brief Workload b: "get_all"
- * Performs random GET requests from the main keyspace.
- * Assumes keys either exist (e.g., from a previous 'put_all' run)
- * or are expected to fail (cache-miss workload).
- */
-class GetAllWorkload : public IWorkload {
-    std::uniform_int_distribution<> dist;
-public:
-    GetAllWorkload() : dist(1, KEYSPACE_SIZE) {}
-
-    httplib::Result execute(httplib::Client& cli, std::mt19937& gen) override {
-        int key = dist(gen);
-        std::string path = "/key/" + std::to_string(key);
-        return cli.Get(path.c_str());
-    }
-
-    std::unique_ptr<IWorkload> clone() const override {
-        return std::make_unique<GetAllWorkload>(*this);
-    }
-};
-
-/**
- * @brief Workload c: "get_popular"
- * Performs GET requests from a small, "popular" set of keys (1-100).
- * Pre-populates these keys in the prepare() step.
- */
-class GetPopularWorkload : public IWorkload {
-    std::uniform_int_distribution<> popular_dist;
-public:
-    GetPopularWorkload() : popular_dist(1, 100) {}
-
-    void prepare(httplib::Client& cli) override {
-        std::cout << "   Preparing popular keys (1-100)...\n";
-        int prepared_count = 0;
-        int error_count = 0;
-        for (int key = 1; key <= 100; ++key) {
-            std::string path = "/key/" + std::to_string(key);
-            std::string value = "value-" + std::to_string(key);
-            if (auto res = cli.Put(path.c_str(), value, "text/plain")) {
-                if (res->status == 200) {
-                    prepared_count++;
-                } else {
-                    error_count++;
-                }
-            } else {
-                error_count++;
-            }
-        }
-        std::cout << "   ... prepared " << prepared_count << " / 100 keys ("
-                  << error_count << " errors).\n";
-    }
-
-    httplib::Result execute(httplib::Client& cli, std::mt19937& gen) override {
-        int key = popular_dist(gen);
-        std::string path = "/key/" + std::to_string(key);
-        return cli.Get(path.c_str());
-    }
-
-    std::unique_ptr<IWorkload> clone() const override {
-        return std::make_unique<GetPopularWorkload>(*this);
-    }
-};
-
-/**
- * @brief Workload d: "mixed"
- * 80% "get_popular" requests, 20% "unique_put" requests.
- * Pre-populates the popular keys in the prepare() step.
- */
-class MixedWorkload : public IWorkload {
-    std::uniform_int_distribution<> popular_dist;
-    std::uniform_int_distribution<> mix_dist;
-    std::uniform_int_distribution<> unique_write_dist;
-public:
-    MixedWorkload() :
-        popular_dist(1, 100),
-        mix_dist(0, 99),
-        unique_write_dist(LARGE_KEYSPACE_START, LARGE_KEYSPACE_END) {}
-
-    void prepare(httplib::Client& cli) override {
-        std::cout << "   Preparing popular keys (1-100) for 'mixed' workload...\n";
-        int prepared_count = 0;
-        int error_count = 0;
-        for (int key = 1; key <= 100; ++key) {
-            std::string path = "/key/" + std::to_string(key);
-            std::string value = "value-" + std::to_string(key);
-            if (auto res = cli.Put(path.c_str(), value, "text/plain")) {
-                if (res->status == 200) {
-                    prepared_count++;
-                } else {
-                    error_count++;
-                }
-            } else {
-                error_count++;
-            }
-        }
-        std::cout << "   ... prepared " << prepared_count << " / 100 keys ("
-                  << error_count << " errors).\n";
-    }
-
-    httplib::Result execute(httplib::Client& cli, std::mt19937& gen) override {
-        int op = mix_dist(gen); // 0-99
-
-        if (op < 80) { // 80% chance: Get popular
-            int key = popular_dist(gen);
-            std::string path = "/key/" + std::to_string(key);
-            return cli.Get(path.c_str());
-        } else { // 20% chance: Put "unique" (random from large space)
-            int key = unique_write_dist(gen);
-            std::string path = "/key/" + std::to_string(key);
-            std::string value = "value-" + std::to_string(key);
-            return cli.Put(path.c_str(), value, "text/plain");
-        }
-    }
-
-    std::unique_ptr<IWorkload> clone() const override {
-        return std::make_unique<MixedWorkload>(*this);
-    }
-};
 
 
 /**
@@ -219,8 +35,10 @@ public:
  */
 void client_worker(const std::string host, int port, std::unique_ptr<IWorkload> workload, int seed) {
     // Each thread gets its own persistent client and random number generator
+
+    std::cout<<"Client thread"<<seed<<std::endl;
     httplib::Client cli(host, port);
-    cli.set_connection_timeout(5); // 5-second timeout
+    // cli.set_connection_timeout(5); // 5-second timeout
 
     // Seed the random number generator
     std::mt19937 gen;
@@ -238,25 +56,19 @@ void client_worker(const std::string host, int port, std::unique_ptr<IWorkload> 
 
     // Closed-loop: run until main thread signals to stop
     while (keep_running.load()) {
-        try {
-            // --- Workload Generation Logic ---
-            auto start_time = std::chrono::steady_clock::now();
+        auto start_time = std::chrono::steady_clock::now();
 
-            httplib::Result res = workload->execute(cli, gen);
+        httplib::Result res = workload->execute(cli, gen);
 
-            auto end_time = std::chrono::steady_clock::now();
+        auto end_time = std::chrono::steady_clock::now();
 
-            // --- Response Validation ---
-            if (res && res->status == 200) {
-                thread_requests++;
-                thread_duration_micros += std::chrono::duration_cast<std::chrono::microseconds>(
-                    end_time - start_time
-                ).count();
-            } else {
-                thread_errors++;
-            }
-        } catch (const std::exception& e) {
-            // Catch any exceptions during the request (e.g., connection issues)
+        // --- Response Validation ---
+        if (res && res->status == 200) {
+            thread_requests++;
+            thread_duration_micros += std::chrono::duration_cast<std::chrono::microseconds>(
+                end_time - start_time
+            ).count();
+        } else {
             thread_errors++;
         }
     }
@@ -317,24 +129,23 @@ int main(int argc, char* argv[]) {
     }
 
     // --- Preparation Step ---
-    std::cout << "🔧 Running preparation step for workload '" << workload_type << "'...\n";
+    std::cout << "Running preparation step for workload '" << workload_type << "'...\n";
     try {
         httplib::Client prepare_cli(host, port);
         prepare_cli.set_connection_timeout(10); // 10-second timeout for prep
         workload_template->prepare(prepare_cli);
-        std::cout << "✅ Preparation complete.\n\n";
+        std::cout << "Preparation complete.\n\n";
     } catch (const std::exception& e) {
         std::cerr << "Error during preparation step: " << e.what() << "\n";
-        std::cerr << "Please ensure server is running at http://" << host << ":" << port << "\n";
-        return 1; // Exit if preparation fails
+        return 1;
     }
 
 
-    std::cout << "🚀 Starting load test...\n"
+    std::cout << "Starting load test...\n"
               << "   Target:    http://" << host << ":" << port << "\n"
               << "   Clients:   " << num_threads << "\n"
               << "   Duration:  " << duration_sec << " seconds\n"
-              << "   Workload:  " << workload_type << " (OOP Refactor)\n";
+              << "   Workload:  " << workload_type << "\n";
 
     if (seed != -1) {
         std::cout << "   Seed:      " << seed << " (Deterministic, varied per thread)\n\n";
@@ -360,7 +171,7 @@ int main(int argc, char* argv[]) {
 
     // --- Stop Test ---
     keep_running.store(false);
-    std::cout << "⏳ Stopping test and joining threads...\n";
+    std::cout << "Stopping test and joining threads...\n";
 
     for (auto& t : threads) {
         t.join();

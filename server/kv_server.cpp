@@ -1,10 +1,13 @@
 #include "kv_server.hpp"
 
+std::atomic<long long> KvServer::active_thread_count{0};
+
 KvServer::KvServer(ConnectionPool<KvDatabase>* dbConnPool, int thread_count, int cache_size):
     connPool(dbConnPool), cache(static_cast<size_t>(cache_size))
 {
+    
     server.new_task_queue = [thread_count]{
-        return new httplib::ThreadPool(thread_count);
+        return new httplib::ThreadPool(thread_count, thread_count * 2);
     };
 
 
@@ -31,22 +34,32 @@ void KvServer::GetKv(const httplib::Request &req, httplib::Response &res)
 {
     try
     {
-        auto database = connPool->acquire();
-
+        // std::cout << "Received GET request for " << req.path << std::endl;
         // req.matches[0] is the full path, req.matches[1] is the first capture group
         int key = std::stoi(req.matches[1].str());
 
         totalGets++;
-
+        
         auto val = cache.Get(key);
         if(val.has_value())
         {
+            volatile int x = 10000000;
+            active_thread_count.fetch_add(1);
+            std::cout<<"Active threads: "<<active_thread_count.load()<<std::endl;
+            while(true)
+            {
+                x--;
+                if(x==0) break;
+            }
+            active_thread_count.fetch_sub(1);
+            std::cout<<"Active threads: "<<active_thread_count.load()<<std::endl;
             res.set_content(val.value(), "text/plain");
             res.status = 200; // OK
             cacheHits++;
             return;
         }
-
+        
+        auto database = connPool->acquire();
         auto opt_value = database->getValueForKey(key);
 
         if (opt_value.has_value())
@@ -69,7 +82,6 @@ void KvServer::GetKv(const httplib::Request &req, httplib::Response &res)
     }
     catch (const std::exception &e)
     {
-        // Handle potential database errors
         res.set_content("Internal server error: " + std::string(e.what()), "text/plain");
         res.status = 500; // Internal Server Error
     }

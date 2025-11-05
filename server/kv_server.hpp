@@ -12,6 +12,8 @@ class KvServer
     httplib::Server server;
     FineLRUCache<int, std::string> cache;
 
+    static std::atomic<long long> active_thread_count;
+
 public:
     int totalGets=0;
     int cacheHits=0;

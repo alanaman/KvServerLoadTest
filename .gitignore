@@ -7,8 +7,8 @@ cmake_install.cmake
 
 # VS Code settings
 .vscode/
-.devcontainer/
-
+.vs/
+.idea/
 
 # Other common build artifacts
 *.o

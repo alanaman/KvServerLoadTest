@@ -124,7 +124,7 @@ public:
             std::lock_guard<std::mutex> lock(shard->mutex_);
             shard->cache_map_.clear();
             shard->lru_list_.clear();
-        }
+        } 
     }
 
     /**

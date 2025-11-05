@@ -116,5 +116,5 @@ private:
     size_t max_size_;
     
     // Mutex to protect all R/W operations
-    mutable std::mutex mutex_; 
+    mutable std::mutex mutex_;
 };
