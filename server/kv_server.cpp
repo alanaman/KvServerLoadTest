@@ -43,16 +43,6 @@ void KvServer::GetKv(const httplib::Request &req, httplib::Response &res)
         auto val = cache.Get(key);
         if(val.has_value())
         {
-            volatile int x = 10000000;
-            active_thread_count.fetch_add(1);
-            std::cout<<"Active threads: "<<active_thread_count.load()<<std::endl;
-            while(true)
-            {
-                x--;
-                if(x==0) break;
-            }
-            active_thread_count.fetch_sub(1);
-            std::cout<<"Active threads: "<<active_thread_count.load()<<std::endl;
             res.set_content(val.value(), "text/plain");
             res.status = 200; // OK
             cacheHits++;

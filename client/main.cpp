@@ -36,9 +36,9 @@ std::atomic<long long> total_duration_micros{0};
 void client_worker(const std::string host, int port, std::unique_ptr<IWorkload> workload, int seed) {
     // Each thread gets its own persistent client and random number generator
 
-    std::cout<<"Client thread"<<seed<<std::endl;
+    // std::cout<<"Client thread"<<seed<<std::endl;
     httplib::Client cli(host, port);
-    // cli.set_connection_timeout(5); // 5-second timeout
+    cli.set_connection_timeout(5);
 
     // Seed the random number generator
     std::mt19937 gen;

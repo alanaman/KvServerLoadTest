@@ -44,6 +44,11 @@ void KvDatabase::Bootstrap()
     {
         db.execute("DROP TABLE IF EXISTS key_value;");
         db.execute("CREATE TABLE key_value (key INTEGER PRIMARY KEY, value TEXT NOT NULL);");
+        db.execute(R"(
+            INSERT INTO key_value (key, value)
+            SELECT i, 'value_' || i FROM 
+            generate_series(0, 1000000) AS s(i);
+            )");
     }
     catch (const std::exception& e)
     {

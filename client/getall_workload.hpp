@@ -14,24 +14,24 @@ public:
     GetAllWorkload() : dist(1, KEYSPACE_SIZE) {}
 
     void prepare(httplib::Client& cli) override {
-        std::cout << "   Preparing popular keys (1-" << KEYSPACE_SIZE <<")...\n";
-        int prepared_count = 0;
-        int error_count = 0;
-        for (int key = 1; key <= KEYSPACE_SIZE; ++key) {
-            std::string path = "/key/" + std::to_string(key);
-            std::string value = "value-" + std::to_string(key);
-            if (auto res = cli.Put(path.c_str(), value, "text/plain")) {
-                if (res->status == 200) {
-                    prepared_count++;
-                } else {
-                    error_count++;
-                    std::cerr << "     Error preparing key " << key << ": HTTP " << res->status << " " << res->body << "\n";
-                }
-            } else {
-                error_count++;
-            }
-        }
-        std::cout << "    Prepared " << prepared_count << " / " << KEYSPACE_SIZE << " keys (" << error_count << " errors).\n";
+        // std::cout << "   Preparing popular keys (1-" << KEYSPACE_SIZE <<")...\n";
+        // int prepared_count = 0;
+        // int error_count = 0;
+        // for (int key = 1; key <= KEYSPACE_SIZE; ++key) {
+        //     std::string path = "/key/" + std::to_string(key);
+        //     std::string value = "value-" + std::to_string(key);
+        //     if (auto res = cli.Put(path.c_str(), value, "text/plain")) {
+        //         if (res->status == 200) {
+        //             prepared_count++;
+        //         } else {
+        //             error_count++;
+        //             std::cerr << "     Error preparing key " << key << ": HTTP " << res->status << " " << res->body << "\n";
+        //         }
+        //     } else {
+        //         error_count++;
+        //     }
+        // }
+        // std::cout << "    Prepared " << prepared_count << " / " << KEYSPACE_SIZE << " keys (" << error_count << " errors).\n";
     }
 
     httplib::Result execute(httplib::Client& cli, std::mt19937& gen) override {
