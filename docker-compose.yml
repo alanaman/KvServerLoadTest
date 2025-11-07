@@ -16,6 +16,11 @@ services:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   # Your Application Service
   app:
@@ -30,13 +35,14 @@ services:
     networks:
       - app-network
     depends_on:
-      - db # Tells Docker to start the 'db' service before the 'app' service
+      db:
+        condition: service_healthy
     environment:
       DATABASE_HOST: db
       DATABASE_NAME: kv_db
       DATABASE_USER: kv_app
       DATABASE_PASSWORD: mysecretpassword
-    command: sleep infinity
+    command: ["4"]
 
 # Define the network
 networks:

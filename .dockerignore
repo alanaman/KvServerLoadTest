@@ -1,0 +1,6 @@
+# Ignore the local build directory
+build/
+
+# Ignore Git files
+.git/
+.gitignore

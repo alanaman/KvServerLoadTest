@@ -5,6 +5,20 @@ FROM mcr.microsoft.com/devcontainers/cpp:ubuntu
 RUN sudo apt-get update && \
     sudo apt-get install -y libpq-dev
 
-RUN git config --global --add safe.directory '*'
-# Set the working directory to your app
 WORKDIR /app
+
+# Copy the entire project
+# This will now ignore the local 'build/' directory
+COPY . .
+
+# Create the build directory and run CMake/make
+# We specifically build the 'server' target
+RUN mkdir build && cd build && \
+    cmake .. && \
+    cmake --build .
+
+ENTRYPOINT ["./build/server/my_app"]
+
+# # Set a default command (number of threads)
+# # This can be overridden when you run the container
+CMD ["4"]
