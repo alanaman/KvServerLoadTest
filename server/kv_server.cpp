@@ -7,7 +7,7 @@ KvServer::KvServer(ConnectionPool<KvDatabase>* dbConnPool, int thread_count, int
 {
     
     server.new_task_queue = [thread_count]{
-        return new httplib::ThreadPool(thread_count, thread_count * 2);
+        return new httplib::ThreadPool(thread_count, thread_count);
     };
 
 
@@ -86,10 +86,11 @@ void KvServer::PutKv(const httplib::Request &req, httplib::Response &res)
 
         auto database = connPool->acquire();
 
-            // Key exists, so we're updating
-            database->putKeyValue(key, value);
-            res.set_content("Updated", "text/plain");
-            res.status = 200; // OK
+        // Key exists, so we're updating
+        database->putKeyValue(key, value);
+        cache.Remove(key); // Invalidate cache entry if it exists
+        res.set_content("Updated", "text/plain");
+        res.status = 200; // OK
     }
     catch (const std::invalid_argument &e)
     {
@@ -112,6 +113,7 @@ void KvServer::DeleteKv(const httplib::Request &req, httplib::Response &res)
 
         int key = std::stoi(req.matches[1].str());
         database->deleteKeyValue(key);
+        cache.Remove(key); // Invalidate cache entry if it exists
         res.set_content("Deleted", "text/plain");
         res.status = 200; // OK
     }

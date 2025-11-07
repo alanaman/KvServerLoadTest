@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
         }
     };
 
-    KvServer svr(new ConnectionPool<KvDatabase>(num_threads, factory), num_threads);
+    KvServer svr(new ConnectionPool<KvDatabase>(num_threads, factory));
 
     svr.Listen();
 
