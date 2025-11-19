@@ -17,3 +17,8 @@ cmake_install.cmake
 *.so
 *.a
 
+
+tester
+
+env/
+

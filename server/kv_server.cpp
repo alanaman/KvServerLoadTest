@@ -130,10 +130,10 @@ void KvServer::DeleteKv(const httplib::Request &req, httplib::Response &res)
     }
 }
 
-int KvServer::Listen()
+int KvServer::Listen(int port)
 {
-    std::cout << "Starting server on http://0.0.0.0:8000" << std::endl;
-    if (!server.listen("0.0.0.0", 8000))
+    std::cout << "Starting server on http://0.0.0.0:" << port << std::endl;
+    if (!server.listen("0.0.0.0", port))
     {
         std::cerr << "Failed to start server!" << std::endl;
         return -1;

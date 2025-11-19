@@ -17,14 +17,15 @@
 
 tables::KeyValueTable KvDatabase::kv_table;
 
-KvDatabase::KvDatabase()
+
+KvDatabase::KvDatabase(std::string db_hostname)
 {
     auto config = std::make_shared<sqlpp::postgresql::connection_config>();
     
     config->dbname = "kv_db";
     config->user = "kv_app";
     config->password = "mysecretpassword";
-    config->host = "postgres-db";
+    config->host = db_hostname;
     config->port = 5432;
     // config->debug = true; // Uncomment for verbose debugging output
 

@@ -8,14 +8,16 @@
 #include <stdexcept>
 #include <memory>    // Required for std::unique_ptr
 #include <iomanip>   // Required for std::setprecision
+#include <fstream>
 
-#include "putall_workload.hpp"
-#include "getall_workload.hpp"
-#include "getpopular_workload.hpp"
-#include "mixed_workload.hpp"
+#include "workloads/putall_workload.hpp"
+#include "workloads/getall_workload.hpp"
+#include "workloads/getpopular_workload.hpp"
+#include "workloads/mixed_workload.hpp"
 
-// --- Workload Keyspace Definitions ---
-
+#include "TestResults.hpp"
+#include "utils.h"
+#include <fstream>
 
 
 // --- Global Atomic Counters & Stop Flag ---
@@ -23,6 +25,161 @@ std::atomic<bool> keep_running{false};
 std::atomic<long long> total_requests{0};
 std::atomic<long long> total_errors{0};
 std::atomic<long long> total_duration_micros{0};
+
+
+void client_worker(const std::string host, int port, std::unique_ptr<IWorkload> workload, int seed);
+
+// Run a single test with the given number of threads. Returns TestResult.
+// Forward declaration of client_worker (defined below)
+TestResult run_single_test(const std::string& host, int port, int num_threads, int duration_sec,
+                           const std::string& workload_type, std::unique_ptr<IWorkload>& workload_template,
+                           int seed) {
+    // Reset globals
+    total_requests.store(0);
+    total_errors.store(0);
+    total_duration_micros.store(0);
+
+    std::vector<std::thread> threads;
+    keep_running.store(true);
+
+    // --- Monitor data ---
+    std::atomic<bool> monitor_running{true};
+    std::vector<double> cpu_samples;
+    std::vector<double> disk_read_kbps_samples;
+    std::vector<double> disk_write_kbps_samples;
+
+    // Helper lambdas to read /proc/stat and /proc/diskstats
+    auto read_cpu_totals = []() -> double {
+        auto util_perc = execCommand("mpstat -P 0 1 1 | awk '$2 ~ /^[0-9]+$/ { print 100 - $12 }'");
+        double cpu_usage = std::stod(util_perc);
+        return cpu_usage;
+    };
+
+    auto read_disk_sectors = []() -> std::pair<unsigned long long, unsigned long long> {
+        std::ifstream f("/proc/diskstats");
+        if (!f.good()) return {0,0};
+        std::string line;
+        unsigned long long total_read_sectors = 0;
+        unsigned long long total_write_sectors = 0;
+        while (std::getline(f, line)) {
+            std::istringstream ss(line);
+            unsigned long long major, minor;
+            std::string dev;
+            // fields per linux docs
+            unsigned long long reads_completed, reads_merged, sectors_read, ms_read;
+            unsigned long long writes_completed, writes_merged, sectors_written, ms_write;
+            if (!(ss >> major >> minor >> dev)) continue;
+            // Skip loop devices and ram disks by name heuristics (e.g., "loop" or "ram")
+            if (dev.rfind("loop", 0) == 0 || dev.rfind("ram", 0) == 0) continue;
+            if (!(ss >> reads_completed >> reads_merged >> sectors_read >> ms_read
+                      >> writes_completed >> writes_merged >> sectors_written >> ms_write)) {
+                // older kernels may have different columns; try to continue
+                continue;
+            }
+            total_read_sectors += sectors_read;
+            total_write_sectors += sectors_written;
+        }
+        return {total_read_sectors, total_write_sectors};
+    };
+
+    // Start monitor thread: samples every 1 second while keep_running is true
+    std::thread monitor_thread([&]() {
+        // initial readings
+        auto prev_disk = read_disk_sectors();
+        using namespace std::chrono_literals;
+        while (keep_running.load()) {
+            std::this_thread::sleep_for(1s);
+            auto cpu_percent = read_cpu_totals();
+            auto cur_disk = read_disk_sectors();
+
+            cpu_samples.push_back(cpu_percent);
+
+            // Disk: compute sectors diff, convert to KB/s (assuming 512 bytes/sector)
+            unsigned long long prev_read_sectors = prev_disk.first;
+            unsigned long long prev_write_sectors = prev_disk.second;
+            unsigned long long cur_read_sectors = cur_disk.first;
+            unsigned long long cur_write_sectors = cur_disk.second;
+            double read_kbps = 0.0;
+            double write_kbps = 0.0;
+            if (cur_read_sectors >= prev_read_sectors) {
+                unsigned long long delta_sectors = cur_read_sectors - prev_read_sectors;
+                // KB = sectors * 512 / 1024 = sectors * 0.5
+                read_kbps = static_cast<double>(delta_sectors) * 0.5; // per 1 second
+            }
+            if (cur_write_sectors >= prev_write_sectors) {
+                unsigned long long delta_sectors = cur_write_sectors - prev_write_sectors;
+                write_kbps = static_cast<double>(delta_sectors) * 0.5;
+            }
+            disk_read_kbps_samples.push_back(read_kbps);
+            disk_write_kbps_samples.push_back(write_kbps);
+
+            prev_disk = cur_disk;
+        }
+        monitor_running.store(false);
+    });
+
+    // Spawn threads
+    for (int i = 0; i < num_threads; ++i) {
+        int thread_seed = (seed == -1) ? -1 : (seed + i);
+        threads.emplace_back(client_worker, host, port, workload_template->clone(), thread_seed);
+    }
+
+    // Run for duration
+    std::this_thread::sleep_for(std::chrono::seconds(duration_sec));
+
+    // Stop and join
+    keep_running.store(false);
+    for (auto& t : threads) t.join();
+
+    // Wait for monitor thread to finish
+    if (monitor_thread.joinable()) monitor_thread.join();
+
+    // Collect results
+    long long final_requests = total_requests.load();
+    long long final_errors = total_errors.load();
+    long long final_duration_micros = total_duration_micros.load();
+
+    double rps = static_cast<double>(final_requests) / duration_sec;
+    double avg_response_time_ms = 0.0;
+    if (final_requests > 0) {
+        avg_response_time_ms = (static_cast<double>(final_duration_micros) / 1000.0) / static_cast<double>(final_requests);
+    }
+
+    // Compute averages from monitor samples
+    double avg_cpu_percent = 0.0;
+    double avg_disk_read_kbps = 0.0;
+    double avg_disk_write_kbps = 0.0;
+    if (!cpu_samples.empty()) {
+        double sum = 0.0;
+        for (double v : cpu_samples) sum += v;
+        avg_cpu_percent = sum / static_cast<double>(cpu_samples.size());
+    }
+    if (!disk_read_kbps_samples.empty()) {
+        double sum = 0.0;
+        for (double v : disk_read_kbps_samples) sum += v;
+        avg_disk_read_kbps = sum / static_cast<double>(disk_read_kbps_samples.size());
+    }
+    if (!disk_write_kbps_samples.empty()) {
+        double sum = 0.0;
+        for (double v : disk_write_kbps_samples) sum += v;
+        avg_disk_write_kbps = sum / static_cast<double>(disk_write_kbps_samples.size());
+    }
+
+    // Print summary to stdout
+    std::cout << "\n--- Test Complete (" << num_threads << " threads) ---\n"
+              << std::fixed << std::setprecision(2)
+              << "Total Requests: " << final_requests << "\n"
+              << "Total Errors:   " << final_errors << "\n"
+              << "Duration:       " << duration_sec << " s\n"
+              << "Throughput:     " << rps << " req/s\n"
+              << "Avg. Response:  " << avg_response_time_ms << " ms\n"
+              << "Avg. CPU:       " << avg_cpu_percent << " %\n"
+              << "Avg. Disk R:    " << avg_disk_read_kbps << " KB/s\n"
+              << "Avg. Disk W:    " << avg_disk_write_kbps << " KB/s\n";
+
+    return TestResult{num_threads, workload_type, duration_sec, final_requests, final_errors, rps, avg_response_time_ms,
+                      avg_cpu_percent, avg_disk_read_kbps, avg_disk_write_kbps};
+}
 
 
 /**
@@ -153,51 +310,27 @@ int main(int argc, char* argv[]) {
         std::cout << "   Seed:      Random\n\n";
     }
 
-    std::vector<std::thread> threads;
-    keep_running.store(true);
+    // Loop from 1 to num_threads and run incremental tests
+    std::string results_path = "results.json";
+    int t=1;
+    // std::cout << "\nRunning test with " << t << " threads...\n";
+    // TestResult tr = run_single_test(host, port, t, duration_sec, workload_type, workload_template, seed);
 
-    // --- Spawn Client Threads ---
-    for (int i = 0; i < num_threads; ++i) {
-        // Calculate a unique seed for each thread if a base seed is provided.
-        // If no base seed (seed == -1), pass -1 to let the worker use random_device.
-        int thread_seed = (seed == -1) ? -1 : (seed + i);
+    // // Append test result to JSON file
+    // append_result_to_file(tr, results_path);
+    // //slepp for 2 seconds between tests
+    // std::this_thread::sleep_for(std::chrono::seconds(2));
+    for (t = 11; t <= num_threads; t=t+2) {
+        std::cout << "\nRunning test with " << t << " threads...\n";
+        TestResult tr = run_single_test(host, port, t, duration_sec, workload_type, workload_template, seed);
 
-        // Pass a *clone* of the workload object to each thread, plus the unique seed
-        threads.emplace_back(client_worker, host, port, workload_template->clone(), thread_seed);
+        // Append test result to JSON file
+        append_result_to_file(tr, results_path);
+        //slepp for 2 seconds between tests
+        std::this_thread::sleep_for(std::chrono::seconds(2));
     }
 
-    // --- Run Test Duration ---
-    std::this_thread::sleep_for(std::chrono::seconds(duration_sec));
-
-    // --- Stop Test ---
-    keep_running.store(false);
-    std::cout << "Stopping test and joining threads...\n";
-
-    for (auto& t : threads) {
-        t.join();
-    }
-
-    // --- Report Results ---
-    long long final_requests = total_requests.load();
-    long long final_errors = total_errors.load();
-    long long final_duration_micros = total_duration_micros.load();
-
-    double rps = static_cast<double>(final_requests) / duration_sec;
-    double avg_response_time_ms = 0.0;
-
-    if (final_requests > 0) {
-        avg_response_time_ms = (static_cast<double>(final_duration_micros) / 1000.0)
-                             / static_cast<double>(final_requests);
-    }
-
-    std::cout << "\n--- Test Complete ---\n"
-              << std::fixed << std::setprecision(2)
-              << "Total Requests: " << final_requests << "\n"
-              << "Total Errors:   " << final_errors << "\n"
-              << "Duration:       " << duration_sec << " s\n"
-              << "Throughput:     " << rps << " req/s\n"
-              << "Avg. Response:  " << avg_response_time_ms << " ms\n";
-
+    std::cout << "All tests complete. Results written to '" << results_path << "'\n";
     return 0;
 }
 

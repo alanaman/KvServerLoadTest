@@ -26,5 +26,5 @@ public:
 
     void DeleteKv(const httplib::Request &req, httplib::Response &res);
 
-    int Listen();
+    int Listen(int port);
 };

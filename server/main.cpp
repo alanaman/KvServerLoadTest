@@ -9,20 +9,23 @@
 
 int main(int argc, char* argv[])
 {
-    if (argc != 2) {
+    if (argc != 4) {
         std::cerr << "Usage: " << argv[0]
-                  << " <threads>\n";
+                  << " <port> <dbhost> <threads>\n";
         return 1;
     }
 
-    int num_threads = std::stoi(argv[1]);
-    KvDatabase kvdb;
+    int port = std::stoi(argv[1]);
+    std::string db_host=argv[2];    
+    int num_threads = std::stoi(argv[3]);
+
+    KvDatabase kvdb(db_host);
     kvdb.Bootstrap();
     kvdb.PrepareStatements();
 
-    auto factory = []() {
+    auto factory = [db_host]() {
         try {
-            auto conn = std::make_unique<KvDatabase>();
+            auto conn = std::make_unique<KvDatabase>(db_host);
             std::cout << "[Factory] New connection created." << std::endl;
             return conn;
         } catch (const std::exception& e) {
@@ -33,7 +36,7 @@ int main(int argc, char* argv[])
 
     KvServer svr(new ConnectionPool<KvDatabase>(num_threads, factory));
 
-    svr.Listen();
+    svr.Listen(port);
 
     return 0;
 }

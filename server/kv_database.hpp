@@ -50,7 +50,7 @@ public:
     PreparedUpdate_t prepared_update;
     PreparedSelect_t prepared_select;
 
-    KvDatabase();
+    KvDatabase(std::string db_hostname = "postgres-db");
 
     void Bootstrap();
     

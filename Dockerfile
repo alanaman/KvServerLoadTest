@@ -13,11 +13,11 @@ COPY . .
 
 # Create the build directory and run CMake/make
 # We specifically build the 'server' target
-RUN mkdir build && cd build && \
+RUN rm -rf build && mkdir build && cd build && \
     cmake .. && \
     cmake --build .
 
-ENTRYPOINT ["./build/server/my_app"]
+ENTRYPOINT ["./build/server/my_app 8000 postgres-db"]
 
 # # Set a default command (number of threads)
 # # This can be overridden when you run the container
