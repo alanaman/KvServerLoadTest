@@ -13,9 +13,10 @@ COPY . .
 
 # Create the build directory and run CMake/make
 # We specifically build the 'server' target
-RUN mkdir build && cd build && \
+RUN rm -rf build && mkdir build && cd build && \
     cmake .. && \
     cmake --build .
+
 
 ENTRYPOINT ["./build/server/my_app"]
 

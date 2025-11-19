@@ -32,48 +32,42 @@ KvServer::KvServer(ConnectionPool<KvDatabase>* dbConnPool, int thread_count, int
 
 void KvServer::GetKv(const httplib::Request &req, httplib::Response &res)
 {
-    try
+    // std::cout << "Received GET request for " << req.path << std::endl;
+    // req.matches[0] is the full path, req.matches[1] is the first capture group
+    int key = std::stoi(req.matches[1].str());
+
+    totalGets++;
+    
+    auto val = cache.Get(key);
+    if(val.has_value())
     {
-        // std::cout << "Received GET request for " << req.path << std::endl;
-        // req.matches[0] is the full path, req.matches[1] is the first capture group
-        int key = std::stoi(req.matches[1].str());
-
-        totalGets++;
-        
-        auto val = cache.Get(key);
-        if(val.has_value())
-        {
-            res.set_content(val.value(), "text/plain");
-            res.status = 200; // OK
-            cacheHits++;
-            return;
-        }
-        
-        auto database = connPool->acquire();
-        auto opt_value = database->getValueForKey(key);
-
-        if (opt_value.has_value())
-        {
-            res.set_content(opt_value.value(), "text/plain");
-            res.status = 200; // OK
-
-            cache.Put(key, opt_value.value());
-        }
-        else
-        {
-            res.set_content("Key not found", "text/plain");
-            res.status = 404; // Not Found
-        }
+        // volatile int x=0;
+        // while (true)
+        // {
+        //     x++;
+        //     if(x==10000000)
+        //         break;   
+        // }
+        res.set_content(val.value(), "text/plain");
+        res.status = 200; // OK
+        cacheHits++;
+        return;
     }
-    catch (const std::invalid_argument &e)
+    
+    auto database = connPool->acquire();
+    auto opt_value = database->getValueForKey(key);
+
+    if (opt_value.has_value())
     {
-        res.set_content("Invalid key format. Key must be an integer.", "text/plain");
-        res.status = 400; // Bad Request
+        res.set_content(opt_value.value(), "text/plain");
+        res.status = 200; // OK
+
+        cache.Put(key, opt_value.value());
     }
-    catch (const std::exception &e)
+    else
     {
-        res.set_content("Internal server error: " + std::string(e.what()), "text/plain");
-        res.status = 500; // Internal Server Error
+        res.set_content("Key not found", "text/plain");
+        res.status = 404; // Not Found
     }
 }
 
@@ -132,8 +126,8 @@ void KvServer::DeleteKv(const httplib::Request &req, httplib::Response &res)
 
 int KvServer::Listen()
 {
-    std::cout << "Starting server on http://0.0.0.0:8000" << std::endl;
-    if (!server.listen("0.0.0.0", 8000))
+    std::cout << "Starting server on http://0.0.0.0:8005" << std::endl;
+    if (!server.listen("0.0.0.0", 8005))
     {
         std::cerr << "Failed to start server!" << std::endl;
         return -1;

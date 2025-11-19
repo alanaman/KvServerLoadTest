@@ -22,6 +22,8 @@ services:
     #   - seccomp:unconfined
 
     # Overrides default command so things don't shut down after the process ends.
+    depends_on:
+      db:
     command: sleep infinity
     entrypoint: []
  

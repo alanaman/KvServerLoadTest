@@ -24,7 +24,7 @@ KvDatabase::KvDatabase()
     config->dbname = "kv_db";
     config->user = "kv_app";
     config->password = "mysecretpassword";
-    config->host = "postgres-db";
+    config->host = "localhost";
     config->port = 5432;
     // config->debug = true; // Uncomment for verbose debugging output
 
@@ -54,13 +54,6 @@ void KvDatabase::Bootstrap()
     {
         std::cerr << "Database error: " << e.what() << std::endl;
     }        
-}
-
-void KvDatabase::PrepareStatements()
-{
-    prepared_insert = db.prepare(_get_prepared_insert_type());
-    prepared_update = db.prepare(_get_prepared_update_type());
-    prepared_select = db.prepare(_get_prepared_select_type());
 }
 
 void KvDatabase::insertKeyValue(int key, const std::string &value)
@@ -140,13 +133,13 @@ void KvDatabase::updateKeyValue(int key, const std::string& value)
     }
 }
 
-void KvDatabase::insertKeyValuePrep(int key, const std::string &value)
-{
-    prepared_insert.params.key = key;
-    prepared_insert.params.value = value;
+// void KvDatabase::insertKeyValuePrep(int key, const std::string &value)
+// {
+//     prepared_insert.params.key = key;
+//     prepared_insert.params.value = value;
 
-    db(prepared_insert);
-}
+//     db(prepared_insert);
+// }
 
 /**
  * @brief Deletes a key-value pair from the database.
@@ -233,14 +226,11 @@ double KvDatabase::testInsertThroughput(size_t num_operations)
 
         for (size_t i = 0; i < num_operations; ++i)
         {
-            prepared_insert.params.key = static_cast<int>(i);
-            prepared_insert.params.value = "value_" + std::to_string(i);
-            db(prepared_insert);
-            // auto insert = sqlpp::postgresql::insert_into(tab).set(
-            //     tab.key = static_cast<int>(rand()%10000),
-            //     tab.value = "value_" + std::to_string(i)
-            // );
-            // db(insert.on_conflict().do_nothing());
+            auto insert = sqlpp::postgresql::insert_into(kv_table).set(
+                kv_table.key = static_cast<int>(i),
+                kv_table.value = "value_" + std::to_string(i)
+            );
+            db(insert.on_conflict().do_nothing());
         }
         
         db.commit_transaction(); // Commit all operations at once
@@ -275,9 +265,10 @@ double KvDatabase::testUpdateThroughput(size_t num_operations)
 
         for (size_t i = 0; i < num_operations; ++i)
         {
-            prepared_update.params.key = static_cast<int>(i);
-            prepared_update.params.value = "new_value_" + std::to_string(i);
-            db(prepared_update);
+            auto update = sqlpp::update(kv_table).set(
+                kv_table.value = "new_value_" + std::to_string(i)
+            ).where(kv_table.key == static_cast<int>(i));
+            db(update);
         }
         
         db.commit_transaction();
@@ -312,10 +303,9 @@ double KvDatabase::testReadThroughput(size_t num_operations)
 
         for (size_t i = 0; i < num_operations; ++i)
         {
-            prepared_select.params.key = static_cast<int>(i);
-            
+            auto select = sqlpp::select(kv_table.value).from(kv_table).where(kv_table.key == static_cast<int>(i));
             // We must consume the result for a fair test
-            for (const auto& row : db(prepared_select))
+            for (const auto& row : db(select))
             {
                 value_buffer = row.value; 
             }

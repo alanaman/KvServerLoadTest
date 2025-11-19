@@ -4,6 +4,7 @@
 #include "KeyValue.h"
 #include "kv_database.hpp"
 #include "kv_server.hpp"
+// #include "kv_server_cw.hpp"
 
 #include <httplib.h>
 
@@ -18,7 +19,6 @@ int main(int argc, char* argv[])
     int num_threads = std::stoi(argv[1]);
     KvDatabase kvdb;
     kvdb.Bootstrap();
-    kvdb.PrepareStatements();
 
     auto factory = []() {
         try {
@@ -31,7 +31,7 @@ int main(int argc, char* argv[])
         }
     };
 
-    KvServer svr(new ConnectionPool<KvDatabase>(num_threads, factory));
+    KvServer svr(new ConnectionPool<KvDatabase>(num_threads, factory), num_threads);
 
     svr.Listen();
 

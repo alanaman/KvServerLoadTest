@@ -24,6 +24,10 @@ std::atomic<long long> total_requests{0};
 std::atomic<long long> total_errors{0};
 std::atomic<long long> total_duration_micros{0};
 
+std::atomic<int> print_turn{0};
+
+
+
 
 /**
  * @brief The main function for each client thread.
@@ -33,7 +37,7 @@ std::atomic<long long> total_duration_micros{0};
  * @param workload    A unique_ptr to this thread's workload object.
  * @param seed        The seed for the random number generator. If -1, use std::random_device.
  */
-void client_worker(const std::string host, int port, std::unique_ptr<IWorkload> workload, int seed) {
+void client_worker(const std::string host, int port, std::unique_ptr<IWorkload> workload, int seed, int thread_id) {
     // Each thread gets its own persistent client and random number generator
 
     // std::cout<<"Client thread"<<seed<<std::endl;
@@ -73,6 +77,12 @@ void client_worker(const std::string host, int port, std::unique_ptr<IWorkload> 
         }
     }
 
+    while(print_turn.load()!=thread_id)
+    {
+    }
+
+    print_turn.fetch_add(1);
+    std::cout<<"thread "<< thread_id<<", reqs:"<<thread_requests<<std::endl;
     // Add this thread's counts to the global totals
     total_requests.fetch_add(thread_requests);
     total_errors.fetch_add(thread_errors);
@@ -163,7 +173,7 @@ int main(int argc, char* argv[]) {
         int thread_seed = (seed == -1) ? -1 : (seed + i);
 
         // Pass a *clone* of the workload object to each thread, plus the unique seed
-        threads.emplace_back(client_worker, host, port, workload_template->clone(), thread_seed);
+        threads.emplace_back(client_worker, host, port, workload_template->clone(), thread_seed, i);
     }
 
     // --- Run Test Duration ---
