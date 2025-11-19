@@ -123,7 +123,7 @@ TestResult run_single_test(const std::string& host, int port, int num_threads, i
         int thread_seed = (seed == -1) ? -1 : (seed + i);
         threads.emplace_back(client_worker, host, port, workload_template->clone(), thread_seed);
     }
-
+    
     // Run for duration
     std::this_thread::sleep_for(std::chrono::seconds(duration_sec));
 
@@ -313,14 +313,7 @@ int main(int argc, char* argv[]) {
     // Loop from 1 to num_threads and run incremental tests
     std::string results_path = "results.json";
     int t=1;
-    // std::cout << "\nRunning test with " << t << " threads...\n";
-    // TestResult tr = run_single_test(host, port, t, duration_sec, workload_type, workload_template, seed);
-
-    // // Append test result to JSON file
-    // append_result_to_file(tr, results_path);
-    // //slepp for 2 seconds between tests
-    // std::this_thread::sleep_for(std::chrono::seconds(2));
-    for (t = 11; t <= num_threads; t=t+2) {
+    for (t = 1; t <= num_threads; t=t+1) {
         std::cout << "\nRunning test with " << t << " threads...\n";
         TestResult tr = run_single_test(host, port, t, duration_sec, workload_type, workload_template, seed);
 
