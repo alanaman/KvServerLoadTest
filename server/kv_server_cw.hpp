@@ -9,13 +9,12 @@
 class KvServerCw
 {
 public:
-    static std::atomic<long long> thread_count;
-
+int thread_count;
     KvServerCw(ConnectionPool<KvDatabase>* dbConnPool,
              int thread_count=10,
              int cache_size=1024);
 
-    int Listen();
+    int Listen(int port);
 
     // CivetWeb context
     mg_context* ctx = nullptr;

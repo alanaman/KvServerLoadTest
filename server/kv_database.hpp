@@ -9,31 +9,6 @@
 #include <sqlpp11/postgresql/prepared_statement.h>
 #include "KeyValue.h"
 
-// namespace {
-//     // Helper to get the INSERT statement type
-//     auto _get_prepared_insert_type() {
-//         tables::KeyValueTable tab;
-//         auto insert = sqlpp::postgresql::insert_into(tab).set(
-//             tab.key = sqlpp::parameter(tab.key),
-//             tab.value = sqlpp::parameter(tab.value)
-//         );
-//         return insert.on_conflict().do_nothing();
-//     }
-
-//     // Helper to get the UPDATE statement type
-//     auto _get_prepared_update_type() {
-//         tables::KeyValueTable tab;
-//         return update(tab).set(
-//             tab.value = sqlpp::parameter(tab.value)
-//         ).where(tab.key == sqlpp::parameter(tab.key));
-//     }
-
-//     // // Helper to get the SELECT statement type
-//     auto _get_prepared_select_type() {
-//         tables::KeyValueTable tab;
-//         return sqlpp::select(tab.value).from(tab).where(tab.key == sqlpp::parameter(tab.key));
-//     }
-// }
 
 class KvDatabase
 {
@@ -42,15 +17,8 @@ public:
     
     
     sqlpp::postgresql::connection db;
-    // using PreparedInsert_t = decltype(db.prepare(_get_prepared_insert_type()));
-    // using PreparedUpdate_t = decltype(db.prepare(_get_prepared_update_type()));
-    // using PreparedSelect_t = decltype(db.prepare(_get_prepared_select_type()));
 
-    // PreparedInsert_t prepared_insert;
-    // PreparedUpdate_t prepared_update;
-    // PreparedSelect_t prepared_select;
-
-    KvDatabase();
+    KvDatabase(std::string db_hostname = "postgres-db");
 
     void Bootstrap();
     

@@ -4,34 +4,18 @@
 #include "civetweb.h"
 #include <regex>
 #include <sstream>
-
-std::atomic<long long> KvServerCw::thread_count{0};
+#include <cstring>
 
 static int dispatch_handler(struct mg_connection *conn, void *user_data);
-
 
 KvServerCw::KvServerCw(ConnectionPool<KvDatabase>* dbConnPool,
                    int thread_count,
                    int cache_size)
     : connPool(dbConnPool),
+      thread_count(thread_count),
       cache(static_cast<size_t>(cache_size))
 {
-    const char *options[] = {
-        "listening_ports", "8005",
-        "num_threads", std::to_string(thread_count).c_str(),
-        nullptr
-    };
 
-    mg_callbacks callbacks{};
-    ctx = mg_start(&callbacks, this, options);
-
-    if (!ctx) {
-        throw std::runtime_error("Could not start CivetWeb");
-    }
-
-    // Routes
-    mg_set_request_handler(ctx, "/", dispatch_handler, this);
-    mg_set_request_handler(ctx, "/key", dispatch_handler, this);
 }
 
 static int dispatch_handler(struct mg_connection *conn, void *user_data)
@@ -40,29 +24,29 @@ static int dispatch_handler(struct mg_connection *conn, void *user_data)
     const mg_request_info* info = mg_get_request_info(conn);
 
     std::string uri(info->local_uri ? info->local_uri : "");
-    std::string method(info->request_method);
+    const char* method = info->request_method ? info->request_method : "";
 
     // Route "/"
-    if (uri == "/" && method == "GET") {
+    if (uri == "/" && std::strcmp(method, "GET") == 0) {
         self->HandleRoot(conn);
         return 1;
     }
 
-    // Handle /key/<number>
-    std::regex keyRegex("^/key/(\\d+)$");
+    // Handle /<number>
+    std::regex keyRegex("^/(\\d+)$");
     std::smatch match;
     if (std::regex_match(uri, match, keyRegex)) {
         int key = std::stoi(match[1]);
 
-        if (method == "GET") {
+        if (std::strcmp(method, "GET") == 0) {
             self->GetKv(conn, key);
             return 1;
         }
-        else if (method == "PUT") {
+        else if (std::strcmp(method, "PUT") == 0) {
             self->PutKv(conn, key);
             return 1;
         }
-        else if (method == "DELETE") {
+        else if (std::strcmp(method, "DELETE") == 0) {
             self->DeleteKv(conn, key);
             return 1;
         }
@@ -157,9 +141,26 @@ void KvServerCw::send_text(struct mg_connection *conn, int status, const std::st
 }
 
 
-int KvServerCw::Listen()
+int KvServerCw::Listen(int port)
 {
-    std::cout << "Server running on http://0.0.0.0:8005\n";
+    const char *options[] = {
+        "listening_ports", std::to_string(port).c_str(),
+        "num_threads", std::to_string(thread_count).c_str(),
+        "tcp_nodelay", "1",
+        nullptr
+    };
+
+    mg_callbacks callbacks{};
+    ctx = mg_start(&callbacks, this, options);
+
+    if (!ctx) {
+        throw std::runtime_error("Could not start CivetWeb");
+    }
+
+    // Routes
+    mg_set_request_handler(ctx, "/", dispatch_handler, this);
+
+    std::cout << "Server running on http://0.0.0.0:" << port << "\n";
     std::cout << "Press Enter to quit...\n";
     getchar();
     return 0;

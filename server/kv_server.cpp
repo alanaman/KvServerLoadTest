@@ -19,21 +19,21 @@ KvServer::KvServer(ConnectionPool<KvDatabase>* dbConnPool, int thread_count, int
         res.set_content(ss.str(), "text/plain");
     });
 
-    server.Get("/key/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
+    server.Get("/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
         GetKv(req, res);
     });
-    server.Put("/key/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
+    server.Put("/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
         PutKv(req, res);
     });
-    server.Delete("/key/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
+    server.Delete("/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
         DeleteKv(req, res);
     });
 }
 
 void KvServer::GetKv(const httplib::Request &req, httplib::Response &res)
 {
-    // std::cout << "Received GET request for " << req.path << std::endl;
-    // req.matches[0] is the full path, req.matches[1] is the first capture group
+    // res.status = 200; // OK
+    // return;
     int key = std::stoi(req.matches[1].str());
 
     totalGets++;
@@ -41,13 +41,6 @@ void KvServer::GetKv(const httplib::Request &req, httplib::Response &res)
     auto val = cache.Get(key);
     if(val.has_value())
     {
-        // volatile int x=0;
-        // while (true)
-        // {
-        //     x++;
-        //     if(x==10000000)
-        //         break;   
-        // }
         res.set_content(val.value(), "text/plain");
         res.status = 200; // OK
         cacheHits++;
@@ -124,10 +117,10 @@ void KvServer::DeleteKv(const httplib::Request &req, httplib::Response &res)
     }
 }
 
-int KvServer::Listen()
+int KvServer::Listen(int port)
 {
-    std::cout << "Starting server on http://0.0.0.0:8005" << std::endl;
-    if (!server.listen("0.0.0.0", 8005))
+    std::cout << "Starting server on http://0.0.0.0:" << port << std::endl;
+    if (!server.listen("0.0.0.0", port))
     {
         std::cerr << "Failed to start server!" << std::endl;
         return -1;
