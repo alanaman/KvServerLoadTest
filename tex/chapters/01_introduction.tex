@@ -1,0 +1,30 @@
+\chapter{Introduction}
+\label{ch:into}
+
+This project implements an HTTP-based key-value (KV) server with an in-memory cache and a PostgreSQL backend, and a closed-loop multi-threaded load generator used to evaluate performance.
+
+Overview and goals:
+\begin{itemize}
+    \item Build a correct, concurrent HTTP server that supports create (PUT), read (GET) and delete (DELETE) operations.
+    \item Measure how throughput and latency change as client load increases, and identify the primary bottleneck under different workloads.
+    \item Focus experiments on two contrasting workloads: \textbf{Get popular} (cache-heavy) and \textbf{Put all} (database-heavy).
+\end{itemize}
+
+System summary:
+\begin{itemize}
+    \item \textbf{Server:} multi-threaded HTTP front-end with a worker thread pool; consults the cache and queries PostgreSQL on misses.
+    \item \textbf{Cache:} concurrent in-memory key-value cache with an eviction policy (configurable in the implementation).
+    \item \textbf{Database:} PostgreSQL for durable storage; the server uses a client connector to persist writes and fetch missed reads.
+    \item \textbf{Load generator:} closed-loop clients that send requests, wait for responses, and immediately issue the next request; supports Put all, Get popular, Get all and mixed workloads.
+\end{itemize}
+
+Measurements collected per experiment include client-side throughput (requests/sec), average response time, and host resource usage (CPU, disk I/O). The report presents plots and analysis for the Get popular and Put all workloads to highlight cache-dominated and database-dominated saturation behaviour respectively.
+
+Structure:
+\begin{itemize}
+    \item Implementation of the KV server, cache modules, PostgreSQL integration, and a configurable load generator.
+    \item Experimental results and analysis focused on the two principal workloads.
+    \item The remainder of the report covers design and implementation details, experimental setup and results, discussion, and conclusions.
+\end{itemize}
+
+

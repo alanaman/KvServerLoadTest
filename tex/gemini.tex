@@ -1,0 +1,216 @@
+\documentclass[a4paper,11pt,oneside]{book}
+\usepackage{CS_report}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{caption}
+\usepackage{listings}
+\usepackage{minted}
+\usepackage{titlesec}
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries}{\chaptertitlename\ \thechapter}{10pt}{\Huge}
+\titlespacing*{\chapter}
+  {0pt}{10pt}{10pt}
+\titleformat{\chapter}[display]
+  {\normalfont\huge\bfseries}{}{0pt}{\Huge}
+
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\small, % Sets the font style for the code
+  keywordstyle=\color{blue},   % Color for keywords (e.g., 'def', 'if')
+  stringstyle=\color{orange},  % Color for strings
+  commentstyle=\color{gray}\textit, % Color and style for comments
+  breaklines=true,            % Allows long lines to wrap
+  showstringspaces=false,
+  numbers=left,               % Adds line numbers on the left
+  numberstyle=\tiny,          % Sets the font size for line numbers
+  frame=single                % Draws a box around the code block
+}
+
+\usemintedstyle{friendly}
+\definecolor{crem}{rgb}{0.95, 0.95, 0.9}
+\setminted{
+    bgcolor=crem,
+    frame=single,
+    linenos,
+    breaklines
+}
+
+\begin{document}
+
+% \captionsetup[figure]{margin=1.5cm,font=small,name={Figure},labelsep=colon}
+\frontmatter
+
+\begin{titlepage}
+    \begin{center}
+        \includegraphics[width=3cm]{figures/iitblogo.png}\\[0.5cm]
+        {\LARGE Indian Institute of Technology Bombay\\[0.5cm]
+        Department of Computer Science}\\[2cm]
+        \linespread{1.2}\huge {
+            CS 747: Programming Assignment 3
+        }
+        \linespread{1}~\\[2cm]
+        {\Large
+            Alan Babu
+        }\\[1cm]
+        {\large
+            \emph{Instructor:} Shivaram Kalyanakrishnan}\\[1cm]
+        {\large
+            CS 747: Foundations of Intelligent and Learning Agents
+        }\\
+        {
+            \large (Autumn 2025)
+        }
+        \vfill
+        \small \today
+    \end{center}
+\end{titlepage}
+
+\mainmatter
+\chapter{Design of the agent}
+
+\section{Overview}
+
+The approach for the tic-tac-toe game, given in the problem statement, is followed. A heuristic value is calculated for any state of the game. A min-max search algorithm, over this heuristic, was used to find a move that maximizes our agent's utility. This was later converted to a \href{https://en.wikipedia.org/wiki/Negamax#Negamax_with_alpha_beta_pruning}{Negamax algorithm with alpha-beta pruning} to improve performance.
+
+\section{Negamax Implementation(Without optimization)}
+\begin{minted}{python}
+def min_max(chess: Chess, depth, color, alpha=-float('inf'), beta=float('inf')):
+    """
+    Negamax search with alpha-beta pruning.
+    color = +1 if white to move, -1 if black to move.
+    Returns (best_move, best_value)
+    """
+    result = chess.game_result()
+    # if the game is over or we are at max depth of search
+    if result is not None or depth == 0:
+        return None, color * get_heuristic_score(chess)
+
+    best_move = None
+    best_value = -float('inf')
+
+    m, prom = chess.legal_moves()
+    moves = piece_matrix_to_legal_moves(m, prom)
+
+    for move in moves:
+        (i, j), (dx, dy), promotion = move
+        next_state = chess.copy()
+        next_state.make_move(i, j, dx, dy, promotion)
+
+        # recursive negamax with alpha-beta
+        _, value = min_max(next_state, depth - 1, -color, -beta, -alpha)
+        value = -value
+
+        if value > best_value:
+            best_value = value
+            best_move = move
+
+    return best_move, best_value
+\end{minted}
+
+\section{The heuristic value}
+
+Various measures and their combinations were tried. But finally, the value for any state is calculated using two measures:
+\subsection{Pieces on board}
+For each type of piece a weight is assigned. These weights were manually tuned to get a good score.
+\begin{minted}{python}
+PAWN_VAL = 1
+KNIGHT_VAL = 3
+ROOK_VAL = 5
+BISHOP_VAL = 3
+QUEEN_VAL = 9
+KING_VAL = 60
+\end{minted}
+A weighted sum is taken based on the number of pieces on the board.
+\begin{minted}{python}
+    res = bit_count(chess.bitboards)
+    white_sum = (res[1, 0] * PAWN_VAL +
+                    res[1, 1] * KNIGHT_VAL +
+                    res[1, 2] * BISHOP_VAL +
+                    res[1, 3] * ROOK_VAL +
+                    res[1, 4] * QUEEN_VAL)
+
+    black_sum = (res[0, 0] * PAWN_VAL +
+                    res[0, 1] * KNIGHT_VAL +
+                    res[0, 2] * BISHOP_VAL +
+                    res[0, 3] * ROOK_VAL +
+                    res[0, 4] * QUEEN_VAL)
+    
+    score += white_sum - black_sum
+\end{minted}
+
+\subsection{Threat to opponent's pieces}
+A score is calculated based on the pieces that can be captured from this board state/turn.
+\begin{minted}{python}
+    m, prom = chess.legal_moves()
+    moves = piece_matrix_to_legal_moves(m, prom)
+    threat = 0.0
+    for move in moves:
+        (i, j), (dx, dy), promotion = move
+        p = chess.piece_at(i+dx, j+dy, 1-chess.turn)
+        if p==0:
+            threat += PAWN_VAL*CURRENT_TURN_THREAT_MULT
+        elif p==1:
+            threat += KNIGHT_VAL*CURRENT_TURN_THREAT_MULT
+        elif p==2:
+            threat += BISHOP_VAL*CURRENT_TURN_THREAT_MULT
+        elif p==3:
+            threat += ROOK_VAL*CURRENT_TURN_THREAT_MULT
+        elif p==4:
+            threat += QUEEN_VAL*CURRENT_TURN_THREAT_MULT
+        elif p==5:
+            threat += KING_VAL*CURRENT_TURN_THREAT_MULT
+
+    if chess.turn == 1:
+        score += threat
+    else:
+        score -= threat
+\end{minted}
+\subsection{Terminal game states}
+If the game has ended, we ignore all other measures and return a huge positive/negative value depending on who won.
+\begin{minted}{python}
+    result = chess.game_result()
+    if result is not None:
+        return result * RESULT_VAL
+\end{minted}
+
+\section{Optimization}
+$\alpha$-$\beta$ Pruning was used to search a higher depth without hitting the time limit. We try the moves that capture pieces, first to potentially prune more branches.
+\begin{minted}{python}
+def min_max(chess: Chess, depth, color, alpha=-float('inf'), beta=float('inf')):
+    ...
+    moves = piece_matrix_to_legal_moves(m, prom)
+
+    def move_value(move):
+        (i, j), (dx, dy), promotion = move
+        captured = chess.piece_at(i+dx, j+dy, 1 - chess.turn)
+        return 10 if captured != -1 else 0  # prioritize captures
+    moves.sort(key=move_value, reverse=True)
+
+    for move in moves:
+        ...
+        if value > best_value:
+            best_value = value
+            best_move = move
+
+        # alpha-beta pruning
+        alpha = max(alpha, value)
+        if alpha >= beta:
+            break  # prune remaining moves
+
+    return best_move, best_value
+\end{minted}
+
+\chapter{Tasks}
+
+\section{Task 1: Playing against Random player}
+The above algorithm with a search depth of 1 was used.
+\section{Task 2: Playing against Rational player}
+The above algorithm with a search depth of 3 was used.
+\section{Task 3: Build your Best agent}
+The above algorithm with a search depth of 4 was used.
+
+\end{document}

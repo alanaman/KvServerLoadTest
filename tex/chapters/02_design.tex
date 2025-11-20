@@ -1,0 +1,107 @@
+\chapter{System Design}
+\label{ch:sys_des}
+
+This chapter describes the implemented system at a high level: the HTTP front-end, the in-memory cache, the PostgreSQL-backed persistence layer, the load generator, and the concurrency primitives used (worker thread pool and database connection pool).
+\section{Overview}
+
+The system is composed of three cooperating components:
+\begin{itemize}
+	\item \textbf{HTTP server:} accepts client requests and dispatches them to a worker thread pool for processing.
+	\item \textbf{Cache:} an in-memory key-value cache that reduces database accesses for popular keys. The final implementation uses \path{ShardedCache.hpp} with a common interface in \path{KeyValueCache.hpp}.
+	\item \textbf{Database:} a PostgreSQL server used for durable storage. The server uses a connection pool to issue queries for misses, writes and deletes.
+\end{itemize}
+
+The closed-loop load generator (client) is used to exercise the system.
+
+\section{Architecture}
+
+\begin{figure}[H]
+	\centering
+	\includegraphics[width=0.9\textwidth]{figures/architecture.png}
+	\caption{System architecture.}
+	\label{fig:system_arch}
+\end{figure}
+
+\section{Components}
+
+\subsection{HTTP server}
+
+The server implements a lightweight HTTP API for three operations mapped to HTTP verbs: create (PUT), read (GET), and delete (DELETE). Incoming connections are accepted on a listener thread and requests are submitted to a fixed-size worker thread pool. Each worker thread performs the request handling steps described in Section~\ref{sec:request_flow}.
+
+Implementation notes:
+\begin{itemize}
+	\item The server code is in \path{server/kv_server.cpp} and \path{server/kv_server.hpp}.
+	\item A single listener thread accepts connections and dispatches work to the pool to keep the accept path simple and low-latency.
+	\item Thread pool size is configurable at startup (see \path{main.cpp} and server arguments). The fixed-size pool is used to control the number of concurrently active workers and to limit resource usage during high load.
+\end{itemize}
+
+\subsection{Cache}
+
+Cache-related sources are in \path{server/caches/}:
+\begin{itemize}
+	\item \path{KeyValueCache.hpp} — common interfaces and utilities used by cache implementations.
+	\item \path{ShardedCache.hpp} — the shard-based cache used in the final implementation; it partitions keys across multiple buckets to reduce lock contention under concurrent access.
+	\item \path{CoarseLockCache.hpp} — Used initially during testing. Uses a big lock for the whole cache.
+\end{itemize}
+
+The cache evicts entries when capacity(can be set when creating the cache object) is reached according to LRU policy.
+
+\subsection{Database layer}
+
+Persistence is provided by PostgreSQL. The server uses a small connection pool (\path{server/db_conn_pool.hpp}) to avoid the overhead of establishing a new connection per request.
+
+
+Implementation notes:
+\begin{itemize}
+	\item The database CRUD operations is implemented in \path{server/kv_database.cpp} / \path{kv_database.hpp} and uses the pool to obtain ready connections.
+	\item All write (create/delete) operations are applied to PostgreSQL to ensure durable storage.
+	\item Reads first consult the cache; on a miss the worker issues a SELECT to PostgreSQL and (optionally) inserts the result into the cache.
+\end{itemize}
+
+\subsection{Load generator (client)}
+
+The load generator (client application in \path{client/}) is a separate program used for performance evaluation and correctness testing. It runs multiple threads where each thread loops: issue request, wait for response, issue next request. Different workloads can be found in \path{client/workloads/}:
+\begin{itemize}
+	\item Put all (write-heavy, unique keys) — stresses the database layer.
+	\item Get popular (reads to a small hot key set) — stresses cache and CPU contention.
+	\item Get all and mixed workloads are supported for validation.
+\end{itemize}
+
+\section{Request handling flow}
+\label{sec:request_flow}
+
+Each request follows the sequence below (worker thread):
+\begin{enumerate}
+	\item Parse HTTP request and identify operation and key.
+	\item For reads: check the cache. If present, return value immediately.
+	\item On cache miss (or for writes/deletes): obtain a database connection from the pool and execute the required statement (SELECT/INSERT/DELETE).
+	\item For successful writes (PUT) and deletes: the corresponding entries in the lookaside cache are invalidated (removed). This keeps read results consistent with the authoritative database state.
+	\item Send HTTP response and release any per-request resources.
+\end{enumerate}
+
+This pipeline keeps the hot path (cache hit) short and avoids blocking on database I/O when possible.
+
+\section{Concurrency and synchronization}
+
+Key concurrency points and design choices:
+\begin{itemize}
+	\item \textbf{Worker thread pool:} a fixed-size pool to control how many requests are processed concurrently and to limit resource usage. Workers handle request parsing, cache access, and database operations.
+	\item \textbf{Cache locking:} a sharded lock implementation (\path{ShardedCache.hpp}) is used to reduce contention under concurrency.
+	\item \textbf{DB connection pool:} bounded pool implemented in \path{db_conn_pool.hpp} to limit the number of concurrent DB connections and reduce connection setup overhead.
+\end{itemize}
+
+\section{Consistency and eviction}
+
+Writes are applied to PostgreSQL and then the cache is updated or invalidated as appropriate. In particular, on a PUT (write) or DELETE the corresponding lookaside cache entries are removed (invalidated) so subsequent reads observe the updated database state. This approach favors correctness by ensuring stale values are not served after modifying operations.
+
+Eviction is implemented within the cache and is triggered when the configured capacity is reached. The eviction policy is configurable in the implementation; defaults are documented in the code.
+
+\section{Deployment and configuration}
+
+The system is designed to run on a host with PostgreSQL reachable via network or localhost. Confgurable parameters:
+\begin{itemize}
+	\item worker thread pool size (server argument)
+	\item cache implementation and capacity (build/launch option)
+	\item DB connection pool size (configured in \path{db_conn_pool.hpp})
+\end{itemize}
+
