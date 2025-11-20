@@ -19,61 +19,48 @@ KvServer::KvServer(ConnectionPool<KvDatabase>* dbConnPool, int thread_count, int
         res.set_content(ss.str(), "text/plain");
     });
 
-    server.Get("/key/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
+    server.Get("/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
         GetKv(req, res);
     });
-    server.Put("/key/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
+    server.Put("/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
         PutKv(req, res);
     });
-    server.Delete("/key/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
+    server.Delete("/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
         DeleteKv(req, res);
     });
 }
 
 void KvServer::GetKv(const httplib::Request &req, httplib::Response &res)
 {
-    try
+    // res.status = 200; // OK
+    // return;
+    int key = std::stoi(req.matches[1].str());
+
+    totalGets++;
+    
+    auto val = cache.Get(key);
+    if(val.has_value())
     {
-        // std::cout << "Received GET request for " << req.path << std::endl;
-        // req.matches[0] is the full path, req.matches[1] is the first capture group
-        int key = std::stoi(req.matches[1].str());
-
-        totalGets++;
-        
-        auto val = cache.Get(key);
-        if(val.has_value())
-        {
-            res.set_content(val.value(), "text/plain");
-            res.status = 200; // OK
-            cacheHits++;
-            return;
-        }
-        
-        auto database = connPool->acquire();
-        auto opt_value = database->getValueForKey(key);
-
-        if (opt_value.has_value())
-        {
-            res.set_content(opt_value.value(), "text/plain");
-            res.status = 200; // OK
-
-            cache.Put(key, opt_value.value());
-        }
-        else
-        {
-            res.set_content("Key not found", "text/plain");
-            res.status = 404; // Not Found
-        }
+        res.set_content(val.value(), "text/plain");
+        res.status = 200; // OK
+        cacheHits++;
+        return;
     }
-    catch (const std::invalid_argument &e)
+    
+    auto database = connPool->acquire();
+    auto opt_value = database->getValueForKey(key);
+
+    if (opt_value.has_value())
     {
-        res.set_content("Invalid key format. Key must be an integer.", "text/plain");
-        res.status = 400; // Bad Request
+        res.set_content(opt_value.value(), "text/plain");
+        res.status = 200; // OK
+
+        cache.Put(key, opt_value.value());
     }
-    catch (const std::exception &e)
+    else
     {
-        res.set_content("Internal server error: " + std::string(e.what()), "text/plain");
-        res.status = 500; // Internal Server Error
+        res.set_content("Key not found", "text/plain");
+        res.status = 404; // Not Found
     }
 }
 

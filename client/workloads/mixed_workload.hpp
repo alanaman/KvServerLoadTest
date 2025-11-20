@@ -43,11 +43,11 @@ public:
 
         if (op < 80) { // 80% chance: Get popular
             int key = popular_dist(gen);
-            std::string path = "/key/" + std::to_string(key);
+            std::string path = "/" + std::to_string(key);
             return cli.Get(path.c_str());
         } else { // 20% chance: Put "unique" (random from large space)
             int key = unique_write_dist(gen);
-            std::string path = "/key/" + std::to_string(key);
+            std::string path = "/" + std::to_string(key);
             std::string value = "value-" + std::to_string(key);
             return cli.Put(path.c_str(), value, "text/plain");
         }

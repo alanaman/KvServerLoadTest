@@ -16,7 +16,7 @@ public:
 
     httplib::Result execute(httplib::Client& cli, std::mt19937& gen) override {
         int key = dist(gen);
-        std::string path = "/key/" + std::to_string(key);
+        std::string path = "/" + std::to_string(key);
         std::string value = "value-" + std::to_string(key);
         return cli.Put(path.c_str(), value, "text/plain");
     }

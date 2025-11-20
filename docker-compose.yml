@@ -29,7 +29,7 @@ services:
     # If you have a pre-built image, use 'image'
     # image: my-app-image
     container_name: my-app
-    cpuset: "0"
+    # cpuset: "0"
     ports:
       - "8000:8000" # Example: if your app runs on port 8000
     networks:

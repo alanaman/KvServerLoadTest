@@ -313,7 +313,7 @@ int main(int argc, char* argv[]) {
     // Loop from 1 to num_threads and run incremental tests
     std::string results_path = "results.json";
     int t=1;
-    for (t = 1; t <= num_threads; t=t+1) {
+    for (t = num_threads; t <= num_threads; t=t+1) {
         std::cout << "\nRunning test with " << t << " threads...\n";
         TestResult tr = run_single_test(host, port, t, duration_sec, workload_type, workload_template, seed);
 
