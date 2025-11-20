@@ -32,11 +32,9 @@ static int dispatch_handler(struct mg_connection *conn, void *user_data)
         return 1;
     }
 
-    // Handle /<number>
-    std::regex keyRegex("^/(\\d+)$");
-    std::smatch match;
-    if (std::regex_match(uri, match, keyRegex)) {
-        int key = std::stoi(match[1]);
+    // Handle /<number> by assuming the format is correct and skipping regex.
+    if (uri.length() > 1 && uri[0] == '/') {
+        int key = std::stoi(uri.substr(1));
 
         if (std::strcmp(method, "GET") == 0) {
             self->GetKv(conn, key);
