@@ -17,6 +17,7 @@
 
 tables::KeyValueTable KvDatabase::kv_table;
 
+
 KvDatabase::KvDatabase(std::string db_hostname)
 {
     auto config = std::make_shared<sqlpp::postgresql::connection_config>();
