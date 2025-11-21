@@ -195,6 +195,8 @@ void client_worker(const std::string host, int port, std::unique_ptr<IWorkload> 
 
     // std::cout<<"Client thread"<<seed<<std::endl;
     httplib::Client cli(host, port);
+    cli.set_keep_alive(true);
+    cli.set_tcp_nodelay(true);
     cli.set_connection_timeout(5);
 
     // Seed the random number generator

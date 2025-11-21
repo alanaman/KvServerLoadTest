@@ -23,6 +23,9 @@ static int dispatch_handler(struct mg_connection *conn, void *user_data)
     KvServerCw* self = static_cast<KvServerCw*>(user_data);
     const mg_request_info* info = mg_get_request_info(conn);
 
+    // self->send_text(conn, 200, "");
+    // return 1;
+
     std::string uri(info->local_uri ? info->local_uri : "");
     const char* method = info->request_method ? info->request_method : "";
 
@@ -144,6 +147,10 @@ int KvServerCw::Listen(int port)
     const char *options[] = {
         "listening_ports", std::to_string(port).c_str(),
         "num_threads", std::to_string(thread_count).c_str(),
+        "request_timeout_ms", "10000",
+        "keep_alive_timeout_ms", "5000",
+        "max_request_size", "4096",
+        "enable_keep_alive", "yes",   
         "tcp_nodelay", "1",
         nullptr
     };

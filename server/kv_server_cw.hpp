@@ -34,5 +34,5 @@ int thread_count;
     
     // Helper utilities
     std::string read_body(struct mg_connection *conn);
-    void send_text(struct mg_connection *conn, int status, const std::string &s);
+    inline void send_text(struct mg_connection *conn, int status, const std::string &s);
 };
