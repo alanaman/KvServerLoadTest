@@ -39,6 +39,7 @@ add_executable(my_app
     main.cpp
     kv_database.cpp
     kv_server.cpp
+    kv_server_cw.cpp
     )
 
 # --- 5. Link libraries and includes ---
@@ -46,10 +47,19 @@ add_executable(my_app
 # Add our local "include" directory
 target_include_directories(my_app PRIVATE
     ${PROJECT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/civetweb/include
 )
+
+set(CIVETWEB_ENABLE_SSL OFF CACHE BOOL "" FORCE)
+set(CIVETWEB_ENABLE_CXX OFF  CACHE BOOL "" FORCE)
+set(CIVETWEB_ENABLE_WEBSOCKETS OFF CACHE BOOL "" FORCE)
+set(CIVETWEB_BUILD_TESTING OFF CACHE BOOL "" FORCE)
+add_subdirectory(civetweb)
+
 
 # Link our app against the libraries
 target_link_libraries(my_app PRIVATE
-    sqlpp11::postgresql    # This target should now exist
-    # PostgreSQL::PQ         # The modern CMake target for libpq
+    civetweb-c-library
+    sqlpp11::postgresql
+    pthread
 )

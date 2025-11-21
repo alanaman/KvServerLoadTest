@@ -5,12 +5,11 @@ std::atomic<long long> KvServer::active_thread_count{0};
 KvServer::KvServer(ConnectionPool<KvDatabase>* dbConnPool, int thread_count, int cache_size):
     connPool(dbConnPool), cache(static_cast<size_t>(cache_size))
 {
-    
     server.new_task_queue = [thread_count]{
         return new httplib::ThreadPool(thread_count, thread_count);
     };
 
-
+    server.set_tcp_nodelay(true);
     
     server.Get("/", [this](const httplib::Request & /*req*/, httplib::Response &res) {
         std::stringstream ss;

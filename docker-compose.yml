@@ -25,6 +25,7 @@ services:
   # Your Application Service
   app:
     # If you have a Dockerfile, use 'build'
+    image: "mcr.microsoft.com/devcontainers/cpp:ubuntu"
     build: . 
     # If you have a pre-built image, use 'image'
     # image: my-app-image
@@ -42,6 +43,7 @@ services:
       DATABASE_NAME: kv_db
       DATABASE_USER: kv_app
       DATABASE_PASSWORD: mysecretpassword
+    entrypoint: "./build/server/my_app"
     command: ["4"]
 
 # Define the network
