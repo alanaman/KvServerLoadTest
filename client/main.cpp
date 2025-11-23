@@ -57,7 +57,8 @@ TestResult run_single_test(const std::string &host, int port, int num_threads, i
 
     auto read_disk_sectors = []() -> std::pair<long long int, double>
     {
-        auto s_util_perc = execCommand("iostat -dx 1 2 nvme0n1 | awk '/nvme0n1/ {val=$23} END {print val}'");
+        // auto s_util_perc = execCommand("iostat -dx 1 2 nvme0n1 | awk '/nvme0n1/ {val=$23} END {print val}'");
+        auto s_util_perc = "0";
         auto s_write_kbs = execCommand("iostat -dx 1 2 nvme0n1 | awk '/nvme0n1/ {val=$9} END {print val}'");
         return {std::stoll(s_write_kbs), std::stod(s_util_perc)};
         std::ifstream f("/proc/diskstats");
@@ -96,7 +97,7 @@ TestResult run_single_test(const std::string &host, int port, int num_threads, i
         // initial readings
         // auto prev_disk = read_disk_sectors();
         using namespace std::chrono_literals;
-        std::this_thread::sleep_for(2s);
+        // std::this_thread::sleep_for(2s);
         while (keep_running.load()) {
             auto cpu_percent = read_cpu_totals();
             // auto cur_disk = read_disk_sectors();
@@ -387,8 +388,10 @@ int main(int argc, char *argv[])
 
         // Append test result to JSON file
         append_result_to_file(tr, results_path);
+        httplib::Client bootstrap_cli(host, port);
+        bootstrap_cli.Put("/bootstrap");
         // slepp for 2 seconds between tests
-        std::this_thread::sleep_for(std::chrono::seconds(10));
+        std::this_thread::sleep_for(std::chrono::seconds(30));
     }
 
     std::cout << "All tests complete. Results written to '" << results_path << "'\n";

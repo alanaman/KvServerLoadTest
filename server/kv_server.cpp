@@ -27,7 +27,16 @@ KvServer::KvServer(ConnectionPool<KvDatabase>* dbConnPool, int thread_count, int
     server.Delete("/(\\d+)", [this](const httplib::Request &req, httplib::Response &res) {
         DeleteKv(req, res);
     });
+
+    server.Put("/bootstrap", [this](const httplib::Request &req, httplib::Response &res) {
+        auto database = connPool->acquire();
+
+        database->Bootstrap();
+        res.status = 200;
+    });
 }
+
+
 
 void KvServer::GetKv(const httplib::Request &req, httplib::Response &res)
 {
