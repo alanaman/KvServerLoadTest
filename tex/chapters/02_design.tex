@@ -97,11 +97,43 @@ Writes are applied to PostgreSQL and then the cache is updated or invalidated as
 Eviction is implemented within the cache and is triggered when the configured capacity is reached. The eviction policy is configurable in the implementation; defaults are documented in the code.
 
 \section{Deployment and configuration}
+The system is designed to run on a host with PostgreSQL reachable via network or localhost. The server and client are launched from the build output as follows:
 
-The system is designed to run on a host with PostgreSQL reachable via network or localhost. Confgurable parameters:
 \begin{itemize}
-	\item worker thread pool size (server argument)
-	\item cache implementation and capacity (build/launch option)
-	\item DB connection pool size (configured in \path{db_conn_pool.hpp})
+	\item Start the server:
+	\begin{verbatim}
+./server/my_app <port> <dbhost> <threads>
+	\end{verbatim}
+	Arguments:
+	\begin{itemize}
+		\item \texttt{<port>} — TCP port the server listens on.
+		\item \texttt{<dbhost>} — hostname or IP of the PostgreSQL server.
+		\item \texttt{<threads>} — number of worker threads in the server's pool.
+	\end{itemize}
+
+	\item Start the load generator (client):
+	\begin{verbatim}
+./client/client_app <host> <port> <threads_spec>
+	<duration_sec> <workload_type> [seed]
+	\end{verbatim}
+	Arguments:
+	\begin{itemize}
+		\item \texttt{<host>} — server host to connect to.
+		\item \texttt{<port>} — server port.
+		\item \texttt{<threads\_spec>} — thread specification in the format \texttt{start:end:interval} (see below).
+		\item \texttt{<duration\_sec>} — total duration to run the load test in seconds.
+		\item \texttt{<workload\_type>} — workload to run; one of \texttt{put\_all}, \texttt{get\_all}, \texttt{get\_popular}, \texttt{mixed}.
+		\item \texttt{[seed]} — optional integer seed for the workload's RNG to allow reproducible runs.
+	\end{itemize}
+\end{itemize}
+
+\paragraph{Threads Spec Format:} \texttt{start:end:interval} — run client tests with the number of threads starting at \texttt{start}, incrementing by \texttt{interval} until \texttt{end} (inclusive). For example, \texttt{1:8:1} runs tests with 1,2,...,8 threads.
+
+\paragraph{Workload Types:}
+\begin{itemize}
+	\item \texttt{put\_all} — write-heavy workload that writes unique keys.
+	\item \texttt{get\_all} — read workload over a large keyspace.
+	\item \texttt{get\_popular} — reads skewed to a small hot set (stresses cache).
+	\item \texttt{mixed} — a mixture of reads and writes.
 \end{itemize}
 
