@@ -38,7 +38,10 @@ def prepare_series(data: List[Dict]) -> Dict[str, List[Tuple[int, float, float, 
     (threads, throughput, avg_response_ms, avg_cpu_percent, avg_disk_write_kbps)
     sorted by threads.
     """
-    grouped: Dict[str, List[Tuple[int, float, float, float, float]]] = defaultdict(list)
+    # Use a dict for each workload to store items by thread count.
+    # This ensures that if we encounter duplicates for the same thread count,
+    # the previous one is overwritten.
+    grouped_by_threads: Dict[str, Dict[int, Tuple[int, float, float, float, float]]] = defaultdict(dict)
     for row in data:
         wt = row.get("workload_type")
         if wt is None:
@@ -48,12 +51,12 @@ def prepare_series(data: List[Dict]) -> Dict[str, List[Tuple[int, float, float, 
         avg_ms = float(row.get("avg_response_ms", 0.0))
         cpu = float(row.get("avg_cpu_percent", 0.0))
         disk_write = float(row.get("avg_disk_write_kbps", 0.0))
-        grouped[wt].append((threads, throughput, avg_ms, cpu, disk_write))
+        grouped_by_threads[wt][threads] = (threads, throughput, avg_ms, cpu, disk_write)
 
-    # sort each series by threads
-    for wt, items in grouped.items():
-        items.sort(key=lambda x: x[0])
-        grouped[wt] = items
+    # Convert back to a list of tuples and sort by threads
+    grouped: Dict[str, List[Tuple[int, float, float, float, float]]] = {}
+    for wt, items_dict in grouped_by_threads.items():
+        grouped[wt] = sorted(items_dict.values(), key=lambda x: x[0])
 
     return grouped
 

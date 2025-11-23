@@ -26,7 +26,7 @@ KvDatabase::KvDatabase(std::string db_hostname)
     config->user = "kv_app";
     config->password = "mysecretpassword";
     config->host = db_hostname;
-    config->port = 5432;
+    config->port = 5433;
     // config->debug = true; // Uncomment for verbose debugging output
 
     try
@@ -44,12 +44,16 @@ void KvDatabase::Bootstrap()
     try
     {
         db.execute("DROP TABLE IF EXISTS key_value;");
+        
+        // ADDED: TABLESPACE hdd_space at the end
         db.execute("CREATE TABLE key_value (key INTEGER PRIMARY KEY, value TEXT NOT NULL);");
+        db.execute("ALTER TABLE key_value ALTER COLUMN value SET STORAGE EXTERNAL;");
         db.execute(R"(
             INSERT INTO key_value (key, value)
             SELECT i, 'value_' || i FROM 
             generate_series(0, 1000000) AS s(i);
             )");
+        
     }
     catch (const std::exception& e)
     {
@@ -204,13 +208,21 @@ std::optional<std::string> KvDatabase::getValueForKey(int key)
 
 void KvDatabase::putKeyValue(int key, const std::string &value)
 {
+    // prepared_insert.params.key = key;
+    // prepared_insert.params.value = value+std::string(1024 * 10, 'X');;
+
+    // db(prepared_insert);
+    std::string huge_payload_sql = "repeat('X', " + std::to_string(1024*128) + ")";
+
     db(sqlpp::postgresql::insert_into(kv_table).set(
         kv_table.key = key,
-        kv_table.value = value
+        // Use verbatim to inject the raw SQL function 'repeat'
+        kv_table.value = sqlpp::verbatim<sqlpp::text>(huge_payload_sql) 
       )
       .on_conflict(kv_table.key)
       .do_update(
-        kv_table.value = value
+        // On update, we also want to write the huge payload to disk
+        kv_table.value = sqlpp::verbatim<sqlpp::text>("EXCLUDED.value")
       )
     );
 }

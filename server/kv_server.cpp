@@ -65,30 +65,29 @@ void KvServer::GetKv(const httplib::Request &req, httplib::Response &res)
 
 void KvServer::PutKv(const httplib::Request &req, httplib::Response &res)
 {
-    try
-    {
+    // try
+    // {
         int key = std::stoi(req.matches[1].str());
         std::string value = req.body;
-
         auto database = connPool->acquire();
+        
 
-        // Key exists, so we're updating
         database->putKeyValue(key, value);
         cache.Remove(key); // Invalidate cache entry if it exists
-        res.set_content("Updated", "text/plain");
+        // res.set_content("Updated", "text/plain");
         res.status = 200; // OK
-    }
-    catch (const std::invalid_argument &e)
-    {
-        res.set_content("Invalid key format. Key must be an integer.", "text/plain");
-        res.status = 400; // Bad Request
-    }
-    catch (const std::exception &e)
-    {
-        // Handle potential database errors
-        res.set_content("Database error: " + std::string(e.what()), "text/plain");
-        res.status = 500; // Internal Server Error
-    }
+    // }
+    // catch (const std::invalid_argument &e)
+    // {
+    //     res.set_content("Invalid key format. Key must be an integer.", "text/plain");
+    //     res.status = 400; // Bad Request
+    // }
+    // catch (const std::exception &e)
+    // {
+    //     // Handle potential database errors
+    //     res.set_content("Database error: " + std::string(e.what()), "text/plain");
+    //     res.status = 500; // Internal Server Error
+    // }
 }
 
 void KvServer::DeleteKv(const httplib::Request &req, httplib::Response &res)

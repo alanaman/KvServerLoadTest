@@ -7,7 +7,28 @@
 #include <sqlpp11/postgresql/postgresql.h>
 #include <sqlpp11/select.h>
 #include <sqlpp11/postgresql/prepared_statement.h>
+#include <sqlpp11/postgresql/on_conflict.h>
+#include <sqlpp11/postgresql/insert.h>
+#include <sqlpp11/verbatim.h>
 #include "KeyValue.h"
+
+namespace {
+    // Helper to get the INSERT statement type
+    auto _get_prepared_insert_type() {
+        tables::KeyValueTable tab;
+        auto insert = sqlpp::postgresql::insert_into(tab).set(
+            tab.key = sqlpp::parameter(tab.key),
+            tab.value = sqlpp::parameter(tab.value)
+        );
+
+        // Use excluded(tab.value) instead of parameter(tab.value)
+        return insert.on_conflict(tab.key).do_update(
+            tab.value = sqlpp::verbatim<sqlpp::text>("EXCLUDED.value")
+        );
+        // return insert.on_conflict(tab.key).do_nothing();
+        // return insert;
+    }
+}
 
 
 class KvDatabase
@@ -15,8 +36,10 @@ class KvDatabase
 public:
     static tables::KeyValueTable kv_table;
     
-    
     sqlpp::postgresql::connection db;
+    
+    using PreparedInsert_t = decltype(db.prepare(_get_prepared_insert_type()));
+    PreparedInsert_t prepared_insert;
 
     KvDatabase(std::string db_hostname = "postgres-db");
 

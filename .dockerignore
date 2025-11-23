@@ -4,3 +4,4 @@ build/
 # Ignore Git files
 .git/
 .gitignore
+**/.git

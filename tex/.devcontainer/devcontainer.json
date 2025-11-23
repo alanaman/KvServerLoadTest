@@ -1,0 +1,26 @@
+{
+  "name": "LaTeX Environment",
+  // We use the official Island of TeX image. 
+  // 'latest' includes a full TeX Live installation (approx. 5GB download).
+  "image": "registry.gitlab.com/islandoftex/images/texlive:latest",
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "James-Yu.latex-workshop",
+        "ban.spellright" 
+      ],
+      "settings": {
+        // clean up auxiliary files automatically
+        "latex-workshop.latex.autoClean.run": "onBuilt",
+        // ensure built-in PDF viewer is used
+        "latex-workshop.view.pdf.viewer": "tab"
+      }
+    }
+  },
+
+  // Optional: Install extra OS packages (e.g., git, python for minted)
+  // "postCreateCommand": "apt-get update && apt-get install -y git python3-pygments",
+
+  "remoteUser": "root"
+}

@@ -24,7 +24,7 @@ void append_result_to_file(const TestResult& r, const std::string& path) {
          << "\"throughput\": " << r.throughput << ", "
          << "\"avg_response_ms\": " << r.avg_response_ms << ", "
          << "\"avg_cpu_percent\": " << r.avg_cpu_percent << ", "
-         << "\"avg_disk_read_kbps\": " << r.avg_disk_read_kbps << ", "
+         << "\"avg_disk_util\": " << r.avg_perc_util << ", "
          << "\"avg_disk_write_kbps\": " << r.avg_disk_write_kbps
          << "}";
 

@@ -1,0 +1,24 @@
+\chapter{Load Testing}
+\label{ch:load_testing}
+
+\section{Get Popular Workload}
+
+We first analyze the \texttt{get\_popular} workload. This workload is designed to be CPU-bound, as it involves a large number of get requests for a small, popular subset of the keys, which should ideally be served from the cache. To create a clear bottleneck and measure the server's performance under CPU-bound conditions, we pinned the server process to a single CPU core (core 0). The client processes, which generate the load, were pinned to other cores (cores 1, 2, and 3). This setup ensures that the server's performance is not limited by client-side resource contention and that we can isolate the server's CPU as the primary bottleneck.
+
+\begin{figure}[H]
+    \centering
+    \fbox{Graph for Get Popular Workload}
+    \caption{Performance of Get Popular Workload with Server on Core 0 and Clients on Cores 1, 2, 3}
+    \label{fig:get_popular_plot}
+\end{figure}
+
+\section{Put All Workload}
+
+Next, we tested the \texttt{put\_all} workload. This workload is designed to be I/O-bound, as it consists entirely of write requests. Initially, we observed that with small value sizes, the CPU would max out before we could saturate the SSD's write capacity. To address this and properly test the I/O subsystem, we increased the payload size for each \texttt{put} request. This change increased the amount of data written per request, making the workload more I/O-intensive and allowing us to better evaluate the database and SSD performance under heavy write load. In this test, processes were allowed to use all available CPU cores.
+
+\begin{figure}[H]
+    \centering
+    \fbox{Graph for Put All Workload}
+    \caption{Performance of Put All Workload with Increased Payload Size}
+    \label{fig:put_all_plot}
+\end{figure}
